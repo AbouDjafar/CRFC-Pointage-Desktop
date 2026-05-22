@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
+import { Eye, Pencil, Plus, Power, ShieldAlert, Trash2, UserPlus, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { CenterModal } from '@/components/CenterModal'
+import { FormSelect } from '@/components/FormSelect'
 import { useAuth } from '@/contexts/AuthContext'
 import { useData } from '@/contexts/DataContext'
 import { employeeMatchesQuery } from '@/lib/reporting'
@@ -11,7 +13,17 @@ type ModalType = 'add' | 'edit' | 'recurring' | null
 
 export function EmployeesPage() {
   const { user } = useAuth()
-  const { employees, absenceReasons, addEmployee, updateEmployee, deleteEmployee, toggleEmployeeActive, setRecurringAbsence, removeRecurringAbsence, getRecurringAbsence } = useData()
+  const {
+    employees,
+    absenceReasons,
+    addEmployee,
+    updateEmployee,
+    deleteEmployee,
+    toggleEmployeeActive,
+    setRecurringAbsence,
+    removeRecurringAbsence,
+    getRecurringAbsence,
+  } = useData()
   const [search, setSearch] = useState('')
   const [showInactive, setShowInactive] = useState(false)
   const [modalType, setModalType] = useState<ModalType>(null)
@@ -21,10 +33,13 @@ export function EmployeesPage() {
   const [reasonId, setReasonId] = useState(absenceReasons[0]?.id ?? '')
   const [comment, setComment] = useState('')
 
-  const filtered = useMemo(() => employees
-    .filter((employee) => (showInactive ? true : employee.isActive))
-    .filter((employee) => employeeMatchesQuery(employee, search))
-    .sort((a, b) => a.fullName.localeCompare(b.fullName, 'fr')), [employees, search, showInactive])
+  const filtered = useMemo(
+    () => employees
+      .filter((employee) => (showInactive ? true : employee.isActive))
+      .filter((employee) => employeeMatchesQuery(employee, search))
+      .sort((a, b) => a.fullName.localeCompare(b.fullName, 'fr')),
+    [employees, search, showInactive],
+  )
 
   function openAdd() {
     setSelectedEmployee(null)
@@ -48,6 +63,10 @@ export function EmployeesPage() {
     setModalType('recurring')
   }
 
+  function closeModal() {
+    setModalType(null)
+  }
+
   async function submitModal() {
     if (modalType === 'add') {
       await addEmployee(`${lastName} ${firstName}`.trim(), firstName, lastName)
@@ -58,7 +77,7 @@ export function EmployeesPage() {
     if (modalType === 'recurring' && selectedEmployee) {
       await setRecurringAbsence(selectedEmployee.id, reasonId, comment || undefined)
     }
-    setModalType(null)
+    closeModal()
   }
 
   return (
@@ -69,7 +88,12 @@ export function EmployeesPage() {
           <h1>{employees.filter((employee) => employee.isActive).length} actifs</h1>
           <p>{employees.length} employe(s) au total.</p>
         </div>
-        {user?.role === 'ADMIN' ? <button className="primary-button" onClick={openAdd}>Ajouter un employe</button> : null}
+        {user?.role === 'ADMIN' ? (
+          <button className="success-button button-leading-icon" onClick={openAdd}>
+            <UserPlus size={16} />
+            Ajouter un employe
+          </button>
+        ) : null}
       </header>
 
       <div className="toolbar">
@@ -79,49 +103,103 @@ export function EmployeesPage() {
       </div>
 
       <div className="card table-list">
-        {filtered.length === 0 ? <div className="empty-inline">Aucun employe trouve.</div> : filtered.map((employee) => (
-          <div key={employee.id} className="table-row">
-            <div>
-              <strong>{employee.fullName}</strong>
-              <div className="muted">{employee.isActive ? 'Actif' : 'Inactif'}{getRecurringAbsence(employee.id) ? ' - Absence recurrente configuree' : ''}</div>
+        {filtered.length === 0 ? (
+          <div className="empty-inline">Aucun employe trouve.</div>
+        ) : filtered.map((employee) => {
+          const hasRecurringAbsence = Boolean(getRecurringAbsence(employee.id))
+          return (
+            <div key={employee.id} className={`table-row${employee.isActive ? '' : ' is-inactive'}`}>
+              <div>
+                <strong>{employee.fullName}</strong>
+                <div className="muted">
+                  {employee.isActive ? 'Actif' : 'Inactif'}
+                  {hasRecurringAbsence ? ' - Absence recurrente configuree' : ''}
+                </div>
+              </div>
+              <div className="table-actions">
+                {!employee.isActive ? <span className="status-badge inactive"><Power size={13} />Desactive</span> : null}
+                <Link className="ghost-button link-button button-leading-icon" to={`/employee/${employee.id}`}>
+                  <Eye size={15} />
+                  Voir
+                </Link>
+                {user?.role === 'ADMIN' ? (
+                  <>
+                    <button className="ghost-button button-leading-icon" onClick={() => openEdit(employee)}>
+                      <Pencil size={15} />
+                      Modifier
+                    </button>
+                    <button className="secondary-button button-leading-icon" onClick={() => openRecurring(employee)}>
+                      <ShieldAlert size={15} />
+                      Absence recurrente
+                    </button>
+                    <button className={employee.isActive ? 'warning-button button-leading-icon' : 'success-button button-leading-icon'} onClick={() => void toggleEmployeeActive(employee.id)}>
+                      <Power size={15} />
+                      {employee.isActive ? 'Desactiver' : 'Activer'}
+                    </button>
+                  </>
+                ) : null}
+              </div>
             </div>
-            <div className="table-actions">
-              <Link className="ghost-button link-button" to={`/employee/${employee.id}`}>Voir</Link>
-              {user?.role === 'ADMIN' ? (
-                <>
-                  <button className="ghost-button" onClick={() => openEdit(employee)}>Modifier</button>
-                  <button className="ghost-button" onClick={() => openRecurring(employee)}>Absence recurrente</button>
-                  <button className="ghost-button" onClick={() => void toggleEmployeeActive(employee.id)}>{employee.isActive ? 'Desactiver' : 'Activer'}</button>
-                </>
-              ) : null}
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
-      <CenterModal open={modalType !== null} title={modalType === 'add' ? 'Ajouter un employe' : modalType === 'edit' ? 'Modifier un employe' : 'Absence recurrente'} onClose={() => setModalType(null)}>
-        <div className="modal-form">
-          {(modalType === 'add' || modalType === 'edit') ? (
+      <CenterModal
+        open={modalType !== null}
+        title={modalType === 'add' ? 'Ajouter un employe' : modalType === 'edit' ? 'Modifier un employe' : 'Absence recurrente'}
+        subtitle={modalType === 'recurring' ? 'Definissez un motif applique automatiquement a cet employe.' : "Renseignez les informations de base de l'employe."}
+        onClose={closeModal}
+        width="620px"
+      >
+        <div className="modal-form modal-form-elevated">
+          {modalType === 'add' || modalType === 'edit' ? (
             <>
-              <label className="field"><span>Prenom</span><input value={firstName} onChange={(event) => setFirstName(event.target.value)} /></label>
-              <label className="field"><span>Nom</span><input value={lastName} onChange={(event) => setLastName(event.target.value)} /></label>
+              <div className="form-grid-two">
+                <label className="field">
+                  <span>Prenom</span>
+                  <input value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="Prenom" />
+                </label>
+                <label className="field">
+                  <span>Nom</span>
+                  <input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Nom" />
+                </label>
+              </div>
               <div className="modal-actions">
-                {modalType === 'edit' && selectedEmployee ? <button className="danger-link" onClick={() => askConfirmation('Supprimer cet employe ?') && void deleteEmployee(selectedEmployee.id)}>Supprimer</button> : <span />}
-                <button className="primary-button" onClick={() => void submitModal()}>Enregistrer</button>
+                {modalType === 'edit' && selectedEmployee ? (
+                  <button className="danger-link button-leading-icon" onClick={async () => {
+                    if (await askConfirmation('Supprimer cet employe ?')) await deleteEmployee(selectedEmployee.id)
+                  }}>
+                    <Trash2 size={14} />
+                    Supprimer
+                  </button>
+                ) : <span />}
+                <button className="success-button button-leading-icon" onClick={() => void submitModal()} disabled={!firstName.trim() || !lastName.trim()}>
+                  <Plus size={16} />
+                  Enregistrer
+                </button>
               </div>
             </>
           ) : (
             <>
               <label className="field">
                 <span>Motif</span>
-                <select value={reasonId} onChange={(event) => setReasonId(event.target.value)}>
-                  {absenceReasons.map((reason) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}
-                </select>
+                <FormSelect value={reasonId} options={absenceReasons.map((reason) => ({ value: reason.id, label: reason.label }))} onChange={setReasonId} placeholder="Choisir un motif" />
               </label>
-              <label className="field"><span>Commentaire</span><textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={4} /></label>
+              <label className="field">
+                <span>Commentaire</span>
+                <textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={4} placeholder="Ajouter une precision utile" />
+              </label>
               <div className="modal-actions">
-                {selectedEmployee && getRecurringAbsence(selectedEmployee.id) ? <button className="danger-link" onClick={() => void removeRecurringAbsence(selectedEmployee.id)}>Supprimer</button> : <span />}
-                <button className="primary-button" onClick={() => void submitModal()}>Enregistrer</button>
+                {selectedEmployee && getRecurringAbsence(selectedEmployee.id) ? (
+                  <button className="danger-link button-leading-icon" onClick={() => void removeRecurringAbsence(selectedEmployee.id)}>
+                    <Trash2 size={14} />
+                    Supprimer
+                  </button>
+                ) : <span />}
+                <button className="success-button button-leading-icon" onClick={() => void submitModal()}>
+                  <Users size={16} />
+                  Enregistrer
+                </button>
               </div>
             </>
           )}

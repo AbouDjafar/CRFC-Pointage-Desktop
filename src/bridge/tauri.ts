@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { DesktopBridge } from '@/bridge/types'
-import type { AbsenceReason, DailyReport, Employee, PickedImportFile, RecurringAbsence, SaveRevealResult, User } from '@/types'
+import type { AbsenceReason, AppSettings, DailyReport, Employee, PickedImportFile, RecurringAbsence, SaveRevealResult, User } from '@/types'
 
 type TauriPickedFile = { name: string; path?: string; bytes: number[] } | null
 
@@ -18,6 +18,8 @@ export const tauriBridge: DesktopBridge = {
   saveReports(reports: DailyReport[]) { return invoke('save_reports', { reports }) },
   getRecurringAbsences() { return invoke<RecurringAbsence[]>('get_recurring_absences') },
   saveRecurringAbsences(absences: RecurringAbsence[]) { return invoke('save_recurring_absences', { absences }) },
+  getAppSettings() { return invoke<AppSettings>('get_app_settings') },
+  saveAppSettings(settings: AppSettings) { return invoke('save_app_settings', { settings }) },
   async pickImportFile(extensions: string[]) {
     const result = await invoke<TauriPickedFile>('pick_import_file', { extensions })
     if (!result) return null

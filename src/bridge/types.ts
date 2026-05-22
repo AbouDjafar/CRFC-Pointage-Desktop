@@ -1,4 +1,4 @@
-import type { AbsenceReason, DailyReport, Employee, PickedImportFile, RecurringAbsence, SaveRevealResult, User } from '@/types'
+import type { AbsenceReason, AppSettings, DailyReport, Employee, PickedImportFile, RecurringAbsence, SaveRevealResult, User } from '@/types'
 
 export interface DesktopBridge {
   loadSession(): Promise<string | null>
@@ -14,6 +14,8 @@ export interface DesktopBridge {
   saveReports(reports: DailyReport[]): Promise<void>
   getRecurringAbsences(): Promise<RecurringAbsence[]>
   saveRecurringAbsences(absences: RecurringAbsence[]): Promise<void>
+  getAppSettings(): Promise<AppSettings>
+  saveAppSettings(settings: AppSettings): Promise<void>
   pickImportFile(extensions: string[]): Promise<PickedImportFile | null>
   savePdfAndReveal(fileName: string, bytes: Uint8Array): Promise<SaveRevealResult>
   saveExcelAndReveal(fileName: string, bytes: Uint8Array): Promise<SaveRevealResult>

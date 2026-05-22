@@ -1,27 +1,22 @@
 import { Link } from 'react-router-dom'
+import { CalendarRange, Eye, FileSpreadsheet, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { desktopBridge } from '@/bridge'
+import { PERIOD_OPTIONS, type PeriodMode, getPeriodThreshold } from '@/constants/periods'
 import { useAuth } from '@/contexts/AuthContext'
 import { useData } from '@/contexts/DataContext'
-import { buildExcelFileName } from '@/lib/exportNames'
+import { formatLongDate, today } from '@/lib/date'
 import { generateExcelBytes } from '@/lib/excel'
-import { formatLongDate, subtractDays, today } from '@/lib/date'
+import { buildExcelFileName } from '@/lib/exportNames'
 import { askConfirmation, showError, showSuccess } from '@/lib/runtime'
-
-type FilterMode = 'all' | '7d' | '30d' | '90d'
 
 export function HistoryPage() {
   const { user } = useAuth()
   const { reports, employees, absenceReasons, deleteReport } = useData()
-  const [filterMode, setFilterMode] = useState<FilterMode>('all')
+  const [filterMode, setFilterMode] = useState<PeriodMode>('all')
   const [status, setStatus] = useState<'all' | 'finalized' | 'draft'>('all')
 
-  const dateThreshold = useMemo(() => {
-    if (filterMode === '7d') return subtractDays(7)
-    if (filterMode === '30d') return subtractDays(30)
-    if (filterMode === '90d') return subtractDays(90)
-    return null
-  }, [filterMode])
+  const dateThreshold = useMemo(() => getPeriodThreshold(filterMode), [filterMode])
 
   const filtered = useMemo(() => {
     let list = [...reports]
@@ -56,13 +51,17 @@ export function HistoryPage() {
           <h1>{filtered.length} rapport{filtered.length > 1 ? 's' : ''}</h1>
           <p>Consultez, filtrez et exportez les rapports existants.</p>
         </div>
-        <button className="secondary-button" onClick={() => void handleExport()}>Exporter Excel</button>
+        <button className="secondary-button button-leading-icon" onClick={() => void handleExport()}>
+          <FileSpreadsheet size={16} />
+          Exporter Excel
+        </button>
       </header>
 
       <div className="toolbar">
-        {(['all', '7d', '30d', '90d'] as FilterMode[]).map((mode) => (
-          <button key={mode} className={`chip${filterMode === mode ? ' active' : ''}`} onClick={() => setFilterMode(mode)}>
-            {mode === 'all' ? 'Tout' : mode}
+        {PERIOD_OPTIONS.map((option) => (
+          <button key={option.key} className={`chip${filterMode === option.key ? ' active' : ''}`} onClick={() => setFilterMode(option.key)}>
+            <CalendarRange size={14} />
+            {option.label}
           </button>
         ))}
         {(['all', 'finalized', 'draft'] as const).map((mode) => (
@@ -74,7 +73,9 @@ export function HistoryPage() {
 
       <div className="card">
         <div className="table-list">
-          {filtered.length === 0 ? <div className="empty-inline">Aucun rapport ne correspond aux filtres selectionnes.</div> : filtered.map((report) => (
+          {filtered.length === 0 ? (
+            <div className="empty-inline">Aucun rapport ne correspond aux filtres selectionnes.</div>
+          ) : filtered.map((report) => (
             <div key={report.id} className="table-row">
               <div>
                 <strong>{formatLongDate(report.date)}</strong>
@@ -82,8 +83,18 @@ export function HistoryPage() {
               </div>
               <div className="table-actions">
                 <span className={`status-badge ${report.status === 'FINALIZED' ? 'success' : 'draft'}`}>{report.status === 'FINALIZED' ? 'Finalise' : 'Brouillon'}</span>
-                <Link className="ghost-button link-button" to={`/report/${report.id}`}>Ouvrir</Link>
-                {user?.role === 'ADMIN' ? <button className="danger-link" onClick={() => askConfirmation('Supprimer ce rapport ?') && void deleteReport(report.id)}>Supprimer</button> : null}
+                <Link className="ghost-button link-button button-leading-icon" to={`/report/${report.id}`}>
+                  <Eye size={15} />
+                  Ouvrir
+                </Link>
+                {user?.role === 'ADMIN' ? (
+                  <button className="danger-link button-leading-icon" onClick={async () => {
+                    if (await askConfirmation('Supprimer ce rapport ?')) await deleteReport(report.id)
+                  }}>
+                    <Trash2 size={14} />
+                    Supprimer
+                  </button>
+                ) : null}
               </div>
             </div>
           ))}

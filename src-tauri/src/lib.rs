@@ -101,6 +101,12 @@ struct SaveRevealResult {
     path: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppSettings {
+    default_late_time: String,
+}
+
 fn database_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let app_data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?;
     fs::create_dir_all(&app_data_dir).map_err(|error| error.to_string())?;
@@ -195,6 +201,12 @@ fn save_json<T: Serialize>(connection: &Connection, key: &str, value: &T) -> Res
     Ok(())
 }
 
+fn default_app_settings() -> AppSettings {
+    AppSettings {
+        default_late_time: "08:15".to_string(),
+    }
+}
+
 fn load_string_state(connection: &Connection, key: &str) -> Result<Option<String>, String> {
     let mut statement = connection
         .prepare("SELECT value FROM app_state WHERE key = ?1")
@@ -232,6 +244,26 @@ fn clear_session(app: tauri::AppHandle) -> Result<(), String> {
         .execute("DELETE FROM app_state WHERE key = 'session_user_id'", [])
         .map_err(|error| error.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+fn get_app_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
+    let connection = connect(&app)?;
+    let stored = load_string_state(&connection, "app_settings")?;
+    if let Some(value) = stored {
+        let settings = serde_json::from_str::<AppSettings>(&value).map_err(|error| error.to_string())?;
+        Ok(settings)
+    } else {
+        let settings = default_app_settings();
+        save_json(&connection, "app_settings", &settings)?;
+        Ok(settings)
+    }
+}
+
+#[tauri::command]
+fn save_app_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<(), String> {
+    let connection = connect(&app)?;
+    save_json(&connection, "app_settings", &settings)
 }
 
 #[tauri::command]
@@ -457,8 +489,9 @@ fn documents_target(subfolder: &str, file_name: &str) -> Result<PathBuf, String>
 fn reveal_file(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
+        let parent = path.parent().ok_or_else(|| "Parent introuvable.".to_string())?;
         Command::new("explorer")
-            .arg(format!("/select,{}", path.display()))
+            .arg(parent)
             .spawn()
             .map_err(|error| error.to_string())?;
     }
@@ -523,6 +556,8 @@ pub fn run() {
             save_reports,
             get_recurring_absences,
             save_recurring_absences,
+            get_app_settings,
+            save_app_settings,
             pick_import_file,
             save_pdf_and_reveal,
             save_excel_and_reveal

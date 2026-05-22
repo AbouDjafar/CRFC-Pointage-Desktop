@@ -1,12 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { desktopBridge } from '@/bridge'
+import { DEFAULT_APP_SETTINGS } from '@/constants/appSettings'
 import { applyImportedEmployees, applyImportedReports, createReportDraft } from '@/domain/data'
 import { SEED_EMPLOYEES, SEED_REASONS } from '@/data/seeds'
 import { parseEmployeesSpreadsheet, parseReportsWorkbook } from '@/lib/importData'
 import { genId } from '@/lib/id'
-import { calcMinutesLate } from '@/lib/reporting'
+import { calcMinutesLate, recalculateReportsLateMinutes } from '@/lib/reporting'
 import { useAuth } from '@/contexts/AuthContext'
-import type { AbsenceEntry, AbsenceReason, DailyReport, Employee, PickedImportFile, RecurringAbsence } from '@/types'
+import type { AbsenceEntry, AbsenceReason, AppSettings, DailyReport, Employee, PickedImportFile, RecurringAbsence } from '@/types'
 
 interface DataContextValue {
   employees: Employee[]
@@ -14,6 +15,7 @@ interface DataContextValue {
   reports: DailyReport[]
   allReports: DailyReport[]
   recurringAbsences: RecurringAbsence[]
+  appSettings: AppSettings
   loading: boolean
   importReportsFromWorkbook(file: PickedImportFile): Promise<{ importedDates: number; replacedDates: number; lateEntries: number; absenceEntries: number }>
   importEmployeesFromSpreadsheet(file: PickedImportFile): Promise<{ created: number; updated: number; skipped: number }>
@@ -34,6 +36,7 @@ interface DataContextValue {
   setRecurringAbsence(employeeId: string, reasonId: string, comment?: string): Promise<void>
   removeRecurringAbsence(employeeId: string): Promise<void>
   getRecurringAbsence(employeeId: string): RecurringAbsence | undefined
+  updateAppSettings(next: Partial<AppSettings>): Promise<void>
 }
 
 const DataContext = createContext<DataContextValue | null>(null)
@@ -44,15 +47,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [absenceReasons, setAbsenceReasons] = useState<AbsenceReason[]>([])
   const [rawReports, setRawReports] = useState<DailyReport[]>([])
   const [recurringAbsences, setRecurringAbsences] = useState<RecurringAbsence[]>([])
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function init() {
-      const [storedEmployees, storedReasons, storedReports, storedRecurring] = await Promise.all([
+      const [storedEmployees, storedReasons, storedReports, storedRecurring, storedSettings] = await Promise.all([
         desktopBridge.getEmployees(),
         desktopBridge.getAbsenceReasons(),
         desktopBridge.getReports(),
         desktopBridge.getRecurringAbsences(),
+        desktopBridge.getAppSettings(),
       ])
       const nextEmployees = storedEmployees.length > 0 ? storedEmployees : SEED_EMPLOYEES
       const nextReasons = storedReasons.length > 0 ? storedReasons : SEED_REASONS
@@ -60,6 +65,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setAbsenceReasons(nextReasons)
       setRawReports(storedReports)
       setRecurringAbsences(storedRecurring)
+      setAppSettings(storedSettings)
       if (storedEmployees.length === 0) await desktopBridge.saveEmployees(nextEmployees)
       if (storedReasons.length === 0) await desktopBridge.saveAbsenceReasons(nextReasons)
       setLoading(false)
@@ -164,8 +170,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [employees, rawReports, recurringAbsences, saveReports, user])
 
   const addLateEntry = useCallback(async (reportId: string, entry: { employeeId: string; arrivalTime: string; note?: string }) => {
-    await saveReports(rawReports.map((report) => report.id !== reportId ? report : { ...report, lateEntries: [...report.lateEntries, { id: genId(), ...entry, employeeNameSnapshot: findEmployeeName(entry.employeeId), minutesLate: calcMinutesLate(entry.arrivalTime) }], updatedAt: new Date().toISOString() }))
-  }, [findEmployeeName, rawReports, saveReports])
+    await saveReports(rawReports.map((report) => report.id !== reportId ? report : { ...report, lateEntries: [...report.lateEntries, { id: genId(), ...entry, employeeNameSnapshot: findEmployeeName(entry.employeeId), minutesLate: calcMinutesLate(entry.arrivalTime, appSettings.defaultLateTime) }], updatedAt: new Date().toISOString() }))
+  }, [appSettings.defaultLateTime, findEmployeeName, rawReports, saveReports])
 
   const removeLateEntry = useCallback(async (reportId: string, entryId: string) => {
     await saveReports(rawReports.map((report) => report.id !== reportId ? report : { ...report, lateEntries: report.lateEntries.filter((entry) => entry.id !== entryId), updatedAt: new Date().toISOString() }))
@@ -207,12 +213,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const getRecurringAbsence = useCallback((employeeId: string) => recurringAbsences.find((item) => item.employeeId === employeeId), [recurringAbsences])
 
+  const updateAppSettings = useCallback(async (next: Partial<AppSettings>) => {
+    const merged = { ...appSettings, ...next }
+    const recalculatedReports = recalculateReportsLateMinutes(rawReports, merged.defaultLateTime)
+    setAppSettings(merged)
+    setRawReports(recalculatedReports)
+    await Promise.all([
+      desktopBridge.saveAppSettings(merged),
+      desktopBridge.saveReports(recalculatedReports),
+    ])
+  }, [appSettings, rawReports])
+
   const value = useMemo(() => ({
     employees,
     absenceReasons,
     reports,
     allReports: rawReports,
     recurringAbsences,
+    appSettings,
     loading,
     importReportsFromWorkbook,
     importEmployeesFromSpreadsheet,
@@ -233,7 +251,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setRecurringAbsence,
     removeRecurringAbsence,
     getRecurringAbsence,
-  }), [absenceReasons, addAbsenceEntry, addEmployee, addLateEntry, createOrUpdateReport, deleteEmployee, deleteReport, employees, finalizeReport, getRecurringAbsence, getReportByDate, importEmployeesFromSpreadsheet, importReportsFromWorkbook, loading, rawReports, recurringAbsences, removeAbsenceEntry, removeLateEntry, removeRecurringAbsence, reopenReport, reports, setRecurringAbsence, setVisitorCount, toggleEmployeeActive, updateEmployee])
+    updateAppSettings,
+  }), [absenceReasons, addAbsenceEntry, addEmployee, addLateEntry, appSettings, createOrUpdateReport, deleteEmployee, deleteReport, employees, finalizeReport, getRecurringAbsence, getReportByDate, importEmployeesFromSpreadsheet, importReportsFromWorkbook, loading, rawReports, recurringAbsences, removeAbsenceEntry, removeLateEntry, removeRecurringAbsence, reopenReport, reports, setRecurringAbsence, setVisitorCount, toggleEmployeeActive, updateAppSettings, updateEmployee])
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
 }

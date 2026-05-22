@@ -1,9 +1,29 @@
-import type { AbsenceReason, DailyReport, Employee } from '@/types'
+import { DEFAULT_APP_SETTINGS } from '@/constants/appSettings'
+import type { AbsenceReason, DailyReport, Employee, LateEntry } from '@/types'
 
-export function calcMinutesLate(value: string) {
+function parseTimeMinutes(value: string) {
   const [hh, mm] = value.split(':').map(Number)
   if (Number.isNaN(hh) || Number.isNaN(mm)) return 0
-  return Math.max(0, hh * 60 + mm - (8 * 60 + 15))
+  return hh * 60 + mm
+}
+
+export function calcMinutesLate(value: string, defaultLateTime = DEFAULT_APP_SETTINGS.defaultLateTime) {
+  return Math.max(0, parseTimeMinutes(value) - parseTimeMinutes(defaultLateTime))
+}
+
+export function recalculateLateEntry(entry: LateEntry, defaultLateTime: string): LateEntry {
+  return {
+    ...entry,
+    minutesLate: calcMinutesLate(entry.arrivalTime, defaultLateTime),
+  }
+}
+
+export function recalculateReportsLateMinutes(reports: DailyReport[], defaultLateTime: string): DailyReport[] {
+  return reports.map((report) => ({
+    ...report,
+    lateEntries: report.lateEntries.map((entry) => recalculateLateEntry(entry, defaultLateTime)),
+    updatedAt: new Date().toISOString(),
+  }))
 }
 
 export function employeeMatchesQuery(employee: Employee, query: string) {

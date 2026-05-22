@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
+import { CheckCheck, Clock3, Download, FilePlus2, Minus, Plus, RotateCcw, UserMinus, UserPlus, Users } from 'lucide-react'
 import { CenterModal } from '@/components/CenterModal'
+import { FormSelect } from '@/components/FormSelect'
 import { desktopBridge } from '@/bridge'
 import { useAuth } from '@/contexts/AuthContext'
 import { useData } from '@/contexts/DataContext'
+import { formatLongDate, today } from '@/lib/date'
 import { buildPdfFileName } from '@/lib/exportNames'
 import { generatePdfBytes } from '@/lib/pdf'
-import { today, formatLongDate } from '@/lib/date'
 import { employeeMatchesQuery } from '@/lib/reporting'
 import { showError, showSuccess } from '@/lib/runtime'
 
@@ -13,10 +15,23 @@ type ModalType = 'late' | 'absent' | null
 
 export function ReportPage() {
   const { user } = useAuth()
-  const { employees, absenceReasons, getReportByDate, createOrUpdateReport, addLateEntry, removeLateEntry, addAbsenceEntry, removeAbsenceEntry, setVisitorCount, finalizeReport, reopenReport } = useData()
+  const {
+    employees,
+    absenceReasons,
+    appSettings,
+    getReportByDate,
+    createOrUpdateReport,
+    addLateEntry,
+    removeLateEntry,
+    addAbsenceEntry,
+    removeAbsenceEntry,
+    setVisitorCount,
+    finalizeReport,
+    reopenReport,
+  } = useData()
   const [modalType, setModalType] = useState<ModalType>(null)
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('')
-  const [arrivalTime, setArrivalTime] = useState('08:30')
+  const [arrivalTime, setArrivalTime] = useState(appSettings.defaultLateTime)
   const [selectedReasonId, setSelectedReasonId] = useState(absenceReasons[0]?.id ?? '')
   const [absenceComment, setAbsenceComment] = useState('')
   const [search, setSearch] = useState('')
@@ -30,17 +45,22 @@ export function ReportPage() {
     const absenceIds = new Set(report?.absenceEntries.map((entry) => entry.employeeId) ?? [])
     return employees
       .filter((employee) => employee.isActive)
-      .filter((employee) => (modalType === 'late' ? !lateIds.has(employee.id) && !absenceIds.has(employee.id) : !lateIds.has(employee.id) && !absenceIds.has(employee.id)))
+      .filter((employee) => !lateIds.has(employee.id) && !absenceIds.has(employee.id))
       .filter((employee) => employeeMatchesQuery(employee, search))
       .sort((a, b) => a.fullName.localeCompare(b.fullName, 'fr'))
-  }, [employees, modalType, report, search])
+  }, [employees, report, search])
 
   function resetModal() {
     setSelectedEmployeeId('')
-    setArrivalTime('08:30')
+    setArrivalTime(appSettings.defaultLateTime)
     setSelectedReasonId(absenceReasons[0]?.id ?? '')
     setAbsenceComment('')
     setSearch('')
+  }
+
+  function closeModal() {
+    setModalType(null)
+    resetModal()
   }
 
   function openModal(type: ModalType) {
@@ -73,9 +93,14 @@ export function ReportPage() {
     } else if (modalType === 'absent' && selectedReasonId) {
       await addAbsenceEntry(report.id, { employeeId: selectedEmployeeId, reasonId: selectedReasonId, comment: absenceComment || undefined })
     }
-    setModalType(null)
-    resetModal()
+    closeModal()
   }
+
+  const employeeOptions = availableEmployees.map((employee) => ({
+    value: employee.id,
+    label: employee.fullName,
+  }))
+  const reasonOptions = absenceReasons.map((reason) => ({ value: reason.id, label: reason.label }))
 
   if (!report) {
     return (
@@ -84,9 +109,12 @@ export function ReportPage() {
           <div>
             <p className="eyebrow">Rapport du jour</p>
             <h1>{formatLongDate(activeDate)}</h1>
-            <p>Aucun rapport n'existe encore pour aujourd'hui.</p>
+            <p>Aucun rapport n&apos;existe encore pour aujourd&apos;hui.</p>
           </div>
-          <button className="primary-button" onClick={handleCreateReport}>Creer le rapport</button>
+          <button className="primary-button button-leading-icon" onClick={handleCreateReport}>
+            <FilePlus2 size={16} />
+            Creer le rapport
+          </button>
         </header>
       </section>
     )
@@ -101,9 +129,22 @@ export function ReportPage() {
           <p>{isFinalized ? 'Rapport finalise' : 'Rapport en brouillon'}</p>
         </div>
         <div className="header-actions">
-          <button className="secondary-button" onClick={handleExportPdf} disabled={pdfLoading}>{pdfLoading ? 'Generation...' : 'Exporter PDF'}</button>
-          {!isFinalized ? <button className="primary-button" onClick={() => void finalizeReport(report.id)}>Finaliser</button> : null}
-          {isFinalized && user?.role === 'ADMIN' ? <button className="warning-button" onClick={() => void reopenReport(report.id)}>Reouvrir</button> : null}
+          <button className="secondary-button button-leading-icon" onClick={handleExportPdf} disabled={pdfLoading}>
+            <Download size={16} />
+            {pdfLoading ? 'Generation...' : 'Exporter PDF'}
+          </button>
+          {!isFinalized ? (
+            <button className="primary-button button-leading-icon" onClick={() => void finalizeReport(report.id)}>
+              <CheckCheck size={16} />
+              Finaliser
+            </button>
+          ) : null}
+          {isFinalized && user?.role === 'ADMIN' ? (
+            <button className="warning-button button-leading-icon" onClick={() => void reopenReport(report.id)}>
+              <RotateCcw size={16} />
+              Reouvrir
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -111,16 +152,28 @@ export function ReportPage() {
         <div className="card">
           <div className="card-header">
             <h2>Retardataires</h2>
-            {!isFinalized ? <button className="ghost-button" onClick={() => openModal('late')}>Ajouter</button> : null}
+            {!isFinalized ? (
+              <button className="success-button button-leading-icon" onClick={() => openModal('late')}>
+                <UserPlus size={16} />
+                Ajouter
+              </button>
+            ) : null}
           </div>
           <div className="list">
-            {report.lateEntries.length === 0 ? <div className="empty-inline">Aucun retardataire enregistre.</div> : report.lateEntries.map((entry) => (
+            {report.lateEntries.length === 0 ? (
+              <div className="empty-inline">Aucun retardataire enregistre.</div>
+            ) : report.lateEntries.map((entry) => (
               <div key={entry.id} className="list-row">
                 <div>
                   <strong>{employees.find((employee) => employee.id === entry.employeeId)?.fullName ?? entry.employeeNameSnapshot ?? 'Inconnu'}</strong>
                   <div className="muted">Arrivee: {entry.arrivalTime} - {entry.minutesLate} min de retard</div>
                 </div>
-                {!isFinalized ? <button className="danger-link" onClick={() => void removeLateEntry(report.id, entry.id)}>Retirer</button> : null}
+                {!isFinalized ? (
+                  <button className="danger-link button-leading-icon" onClick={() => void removeLateEntry(report.id, entry.id)}>
+                    <UserMinus size={14} />
+                    Retirer
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
@@ -129,17 +182,29 @@ export function ReportPage() {
         <div className="card">
           <div className="card-header">
             <h2>Absents</h2>
-            {!isFinalized ? <button className="ghost-button" onClick={() => openModal('absent')}>Ajouter</button> : null}
+            {!isFinalized ? (
+              <button className="success-button button-leading-icon" onClick={() => openModal('absent')}>
+                <UserPlus size={16} />
+                Ajouter
+              </button>
+            ) : null}
           </div>
           <div className="list">
-            {report.absenceEntries.length === 0 ? <div className="empty-inline">Aucun absent enregistre.</div> : report.absenceEntries.map((entry) => (
+            {report.absenceEntries.length === 0 ? (
+              <div className="empty-inline">Aucun absent enregistre.</div>
+            ) : report.absenceEntries.map((entry) => (
               <div key={entry.id} className="list-row">
                 <div>
                   <strong>{employees.find((employee) => employee.id === entry.employeeId)?.fullName ?? entry.employeeNameSnapshot ?? 'Inconnu'}</strong>
                   <div className="muted">{absenceReasons.find((reason) => reason.id === entry.reasonId)?.label ?? 'Inconnu'}</div>
                   {entry.comment ? <div className="muted italic">{entry.comment}</div> : null}
                 </div>
-                {!isFinalized ? <button className="danger-link" onClick={() => void removeAbsenceEntry(report.id, entry.id)}>Retirer</button> : null}
+                {!isFinalized ? (
+                  <button className="danger-link button-leading-icon" onClick={() => void removeAbsenceEntry(report.id, entry.id)}>
+                    <UserMinus size={14} />
+                    Retirer
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>
@@ -148,50 +213,67 @@ export function ReportPage() {
         <div className="card wide-card">
           <div className="card-header">
             <h2>Visiteurs</h2>
+            <span className="status-badge draft">
+              <Users size={13} />
+              Comptage en direct
+            </span>
           </div>
           <div className="visitor-counter">
-            <button className="circle-button" onClick={() => void setVisitorCount(report.id, report.visitorCount - 1)} disabled={isFinalized}>-</button>
+            <button className="circle-button circle-button-visitor" onClick={() => void setVisitorCount(report.id, report.visitorCount - 1)} disabled={isFinalized}>
+              <Minus size={20} />
+            </button>
             <span>{report.visitorCount}</span>
-            <button className="circle-button" onClick={() => void setVisitorCount(report.id, report.visitorCount + 1)} disabled={isFinalized}>+</button>
+            <button className="circle-button circle-button-visitor" onClick={() => void setVisitorCount(report.id, report.visitorCount + 1)} disabled={isFinalized}>
+              <Plus size={20} />
+            </button>
           </div>
         </div>
       </div>
 
-      <CenterModal open={modalType !== null} title={modalType === 'late' ? 'Ajouter un retardataire' : 'Ajouter un absent'} onClose={() => setModalType(null)}>
-        <div className="modal-form">
+      <CenterModal
+        open={modalType !== null}
+        title={modalType === 'late' ? 'Ajouter un retardataire' : 'Ajouter un absent'}
+        subtitle={modalType === 'late' ? `Heure de reference actuelle: ${appSettings.defaultLateTime}` : "Selectionnez l'employe et le motif d'absence."}
+        onClose={closeModal}
+        width="620px"
+      >
+        <div className="modal-form modal-form-elevated">
           <label className="field">
             <span>Rechercher un employe</span>
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nom ou prenom" />
           </label>
           <label className="field">
             <span>Employe</span>
-            <select value={selectedEmployeeId} onChange={(event) => setSelectedEmployeeId(event.target.value)}>
-              <option value="">Selectionner...</option>
-              {availableEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.fullName}</option>)}
-            </select>
+            <FormSelect value={selectedEmployeeId} options={employeeOptions} onChange={setSelectedEmployeeId} placeholder="Selectionner un employe" />
           </label>
           {modalType === 'late' ? (
             <label className="field">
-              <span>Heure d'arrivee</span>
-              <input value={arrivalTime} onChange={(event) => setArrivalTime(event.target.value)} placeholder="08:30" />
+              <span>Heure d&apos;arrivee</span>
+              <div className="time-input-shell">
+                <Clock3 size={16} />
+                <input type="time" value={arrivalTime} onChange={(event) => setArrivalTime(event.target.value)} step={60} />
+              </div>
             </label>
           ) : (
             <>
               <label className="field">
-                <span>Motif d'absence</span>
-                <select value={selectedReasonId} onChange={(event) => setSelectedReasonId(event.target.value)}>
-                  {absenceReasons.map((reason) => <option key={reason.id} value={reason.id}>{reason.label}</option>)}
-                </select>
+                <span>Motif d&apos;absence</span>
+                <FormSelect value={selectedReasonId} options={reasonOptions} onChange={setSelectedReasonId} placeholder="Selectionner un motif" />
               </label>
               <label className="field">
                 <span>Commentaire</span>
-                <textarea value={absenceComment} onChange={(event) => setAbsenceComment(event.target.value)} rows={4} />
+                <textarea value={absenceComment} onChange={(event) => setAbsenceComment(event.target.value)} rows={4} placeholder="Ajouter un commentaire utile" />
               </label>
             </>
           )}
           <div className="modal-actions">
-            <button className="secondary-button" onClick={() => setModalType(null)}>Annuler</button>
-            <button className="primary-button" onClick={() => void submitModal()} disabled={!selectedEmployeeId}>Enregistrer</button>
+            <button className="secondary-button button-leading-icon" onClick={closeModal}>
+              Annuler
+            </button>
+            <button className="success-button button-leading-icon" onClick={() => void submitModal()} disabled={!selectedEmployeeId}>
+              {modalType === 'late' ? <Clock3 size={16} /> : <UserPlus size={16} />}
+              Enregistrer
+            </button>
           </div>
         </div>
       </CenterModal>

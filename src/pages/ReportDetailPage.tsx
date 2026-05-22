@@ -1,10 +1,11 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, CheckCheck, Download, RotateCcw, Trash2 } from 'lucide-react'
 import { desktopBridge } from '@/bridge'
 import { useAuth, userFullName } from '@/contexts/AuthContext'
 import { useData } from '@/contexts/DataContext'
+import { formatDateTime, formatLongDate } from '@/lib/date'
 import { buildPdfFileName } from '@/lib/exportNames'
 import { generatePdfBytes } from '@/lib/pdf'
-import { formatDateTime, formatLongDate } from '@/lib/date'
 import { askConfirmation, showError, showSuccess } from '@/lib/runtime'
 
 export function ReportDetailPage() {
@@ -29,18 +30,44 @@ export function ReportDetailPage() {
 
   return (
     <section className="page">
-      <header className="page-header">
+      <header className="page-header hero-header">
         <div>
           <p className="eyebrow">Detail du rapport</p>
           <h1>{formatLongDate(report.date)}</h1>
           <p>{report.status === 'FINALIZED' ? 'Finalise' : 'Brouillon'}</p>
         </div>
         <div className="header-actions">
-          <Link className="ghost-button link-button" to="/historique">Retour</Link>
-          <button className="secondary-button" onClick={() => void exportPdf()}>Exporter PDF</button>
-          {report.status === 'DRAFT' ? <button className="primary-button" onClick={() => void finalizeReport(report.id)}>Finaliser</button> : null}
-          {report.status === 'FINALIZED' && user?.role === 'ADMIN' ? <button className="warning-button" onClick={() => void reopenReport(report.id)}>Reouvrir</button> : null}
-          {user?.role === 'ADMIN' ? <button className="danger-link" onClick={() => askConfirmation('Supprimer ce rapport ?') && void deleteReport(report.id).then(() => navigate('/historique'))}>Supprimer</button> : null}
+          <Link className="ghost-button link-button button-leading-icon" to="/historique">
+            <ArrowLeft size={16} />
+            Retour
+          </Link>
+          <button className="secondary-button button-leading-icon" onClick={() => void exportPdf()}>
+            <Download size={16} />
+            Exporter PDF
+          </button>
+          {report.status === 'DRAFT' ? (
+            <button className="primary-button button-leading-icon" onClick={() => void finalizeReport(report.id)}>
+              <CheckCheck size={16} />
+              Finaliser
+            </button>
+          ) : null}
+          {report.status === 'FINALIZED' && user?.role === 'ADMIN' ? (
+            <button className="warning-button button-leading-icon" onClick={() => void reopenReport(report.id)}>
+              <RotateCcw size={16} />
+              Reouvrir
+            </button>
+          ) : null}
+          {user?.role === 'ADMIN' ? (
+            <button className="danger-link button-leading-icon" onClick={async () => {
+              if (await askConfirmation('Supprimer ce rapport ?')) {
+                await deleteReport(report.id)
+                navigate('/historique')
+              }
+            }}>
+              <Trash2 size={14} />
+              Supprimer
+            </button>
+          ) : null}
         </div>
       </header>
       <div className="grid-layout">

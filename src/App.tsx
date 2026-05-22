@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AppLoader } from '@/components/AppLoader'
+import { RuntimeModalHost } from '@/components/RuntimeModalHost'
 import { AppShell } from '@/components/AppShell'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { DataProvider } from '@/contexts/DataContext'
@@ -45,6 +46,7 @@ export default function App() {
       <AuthProvider>
         <DataProvider>
           <BrowserRouter>
+            <RuntimeModalHost />
             <Routes>
               <Route path="/" element={<RootRedirect />} />
               <Route element={<PublicOnly />}>

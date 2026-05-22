@@ -1,5 +1,6 @@
+import { DEFAULT_APP_SETTINGS } from '@/constants/appSettings'
 import type { DesktopBridge } from '@/bridge/types'
-import type { AbsenceReason, DailyReport, Employee, PickedImportFile, RecurringAbsence, User } from '@/types'
+import type { AbsenceReason, AppSettings, DailyReport, Employee, PickedImportFile, RecurringAbsence, User } from '@/types'
 
 const storageKeys = {
   users: 'CRFC_USERS_V2',
@@ -8,6 +9,7 @@ const storageKeys = {
   reasons: 'CRFC_REASONS_V1',
   reports: 'CRFC_REPORTS_V2',
   recurring: 'CRFC_RECURRING_V2',
+  appSettings: 'CRFC_APP_SETTINGS_V1',
 }
 
 function loadJson<T>(key: string, fallback: T): T {
@@ -65,6 +67,8 @@ export const browserBridge: DesktopBridge = {
   async saveReports(reports: DailyReport[]) { saveJson(storageKeys.reports, reports) },
   async getRecurringAbsences() { return loadJson<RecurringAbsence[]>(storageKeys.recurring, []) },
   async saveRecurringAbsences(absences: RecurringAbsence[]) { saveJson(storageKeys.recurring, absences) },
+  async getAppSettings() { return loadJson<AppSettings>(storageKeys.appSettings, DEFAULT_APP_SETTINGS) },
+  async saveAppSettings(settings: AppSettings) { saveJson(storageKeys.appSettings, settings) },
   pickImportFile,
   async savePdfAndReveal(fileName, bytes) { return downloadBytes(fileName, bytes, 'application/pdf') },
   async saveExcelAndReveal(fileName, bytes) { return downloadBytes(fileName, bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') },

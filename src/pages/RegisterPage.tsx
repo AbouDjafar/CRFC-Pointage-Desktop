@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { LogIn, UserPlus } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
 export function RegisterPage() {
@@ -42,7 +43,7 @@ export function RegisterPage() {
         <div className="success-card">
           <h2>Compte cree</h2>
           <p>Votre compte agent a ete cree avec succes. Vous pouvez maintenant vous connecter.</p>
-          <button className="primary-button" onClick={() => navigate('/login', { replace: true })}>Se connecter</button>
+          <button className="primary-button button-leading-icon" onClick={() => navigate('/login', { replace: true })}><LogIn size={16} />Se connecter</button>
         </div>
       </div>
     )
@@ -86,7 +87,7 @@ export function RegisterPage() {
           <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
         </label>
         {error ? <div className="alert error">{error}</div> : null}
-        <button className="primary-button" type="submit" disabled={loading}>{loading ? 'Creation...' : 'Creer le compte'}</button>
+        <button className="success-button button-leading-icon" type="submit" disabled={loading}><UserPlus size={16} />{loading ? 'Creation...' : 'Creer le compte'}</button>
         <Link className="secondary-link" to="/login">Deja un compte ? Se connecter</Link>
       </form>
     </div>

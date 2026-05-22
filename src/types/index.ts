@@ -77,3 +77,7 @@ export interface PickedImportFile {
 export interface SaveRevealResult {
   path: string
 }
+
+export interface AppSettings {
+  defaultLateTime: string
+}

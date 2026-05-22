@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { LogIn } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
 export function LoginPage() {
@@ -46,7 +47,7 @@ export function LoginPage() {
           <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Votre mot de passe" />
         </label>
         {error ? <div className="alert error">{error}</div> : null}
-        <button className="primary-button" type="submit" disabled={loading}>{loading ? 'Connexion...' : 'Se connecter'}</button>
+        <button className="primary-button button-leading-icon" type="submit" disabled={loading}><LogIn size={16} />{loading ? 'Connexion...' : 'Se connecter'}</button>
         <Link className="secondary-link" to="/register">Creer un compte</Link>
       </form>
     </div>
