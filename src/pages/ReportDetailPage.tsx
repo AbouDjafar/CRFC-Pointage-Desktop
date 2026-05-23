@@ -28,6 +28,13 @@ export function ReportDetailPage() {
     }
   }
 
+  async function reopenForEditing() {
+    if (report.status === 'FINALIZED') {
+      await reopenReport(report.id)
+    }
+    navigate(`/rapport?date=${report.date}`)
+  }
+
   return (
     <section className="page">
       <header className="page-header hero-header">
@@ -46,13 +53,19 @@ export function ReportDetailPage() {
             Exporter PDF
           </button>
           {report.status === 'DRAFT' ? (
-            <button className="primary-button button-leading-icon" onClick={() => void finalizeReport(report.id)}>
-              <CheckCheck size={16} />
-              Finaliser
-            </button>
+            <>
+              <button className="warning-button button-leading-icon" onClick={() => void reopenForEditing()}>
+                <RotateCcw size={16} />
+                Reouvrir
+              </button>
+              <button className="primary-button button-leading-icon" onClick={() => void finalizeReport(report.id)}>
+                <CheckCheck size={16} />
+                Finaliser
+              </button>
+            </>
           ) : null}
           {report.status === 'FINALIZED' && user?.role === 'ADMIN' ? (
-            <button className="warning-button button-leading-icon" onClick={() => void reopenReport(report.id)}>
+            <button className="warning-button button-leading-icon" onClick={() => void reopenForEditing()}>
               <RotateCcw size={16} />
               Reouvrir
             </button>
@@ -71,7 +84,7 @@ export function ReportDetailPage() {
         </div>
       </header>
       <div className="grid-layout">
-        <div className="card">
+        <div className="card wide-card">
           <div className="card-header"><h2>Metadonnees</h2></div>
           <div className="stack-meta">
             <div>Redige par: <strong>{author ? userFullName(author) : 'Agent'}</strong></div>
@@ -80,12 +93,12 @@ export function ReportDetailPage() {
           </div>
         </div>
         <div className="card">
-          <div className="card-header"><h2>Retards</h2></div>
-          <div className="list">{report.lateEntries.map((entry) => <div key={entry.id} className="list-row"><strong>{employees.find((employee) => employee.id === entry.employeeId)?.fullName ?? entry.employeeNameSnapshot ?? 'Inconnu'}</strong><span>{entry.arrivalTime} - {entry.minutesLate} min</span></div>)}</div>
-        </div>
-        <div className="card">
           <div className="card-header"><h2>Absences</h2></div>
           <div className="list">{report.absenceEntries.map((entry) => <div key={entry.id} className="list-row"><strong>{employees.find((employee) => employee.id === entry.employeeId)?.fullName ?? entry.employeeNameSnapshot ?? 'Inconnu'}</strong><span>{absenceReasons.find((reason) => reason.id === entry.reasonId)?.label ?? 'Inconnu'}</span></div>)}</div>
+        </div>
+        <div className="card">
+          <div className="card-header"><h2>Retards</h2></div>
+          <div className="list">{report.lateEntries.map((entry) => <div key={entry.id} className="list-row"><strong>{employees.find((employee) => employee.id === entry.employeeId)?.fullName ?? entry.employeeNameSnapshot ?? 'Inconnu'}</strong><span>{entry.arrivalTime} - {entry.minutesLate} min</span></div>)}</div>
         </div>
         <div className="card wide-card">
           <div className="card-header"><h2>Visiteurs</h2></div>

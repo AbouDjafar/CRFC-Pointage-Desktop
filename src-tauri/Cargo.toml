@@ -3,6 +3,13 @@ name = "crfc-pointage-desktop"
 version = "0.1.0"
 edition = "2021"
 
+[package.metadata.tauri-winres]
+InternalName = "crfc-pointage-desktop"
+OriginalFilename = "crfc-pointage-desktop.exe"
+FileDescription = "CRFC Pointage Desktop"
+ProductName = "CRFC Pointage Desktop"
+LegalCopyright = "© 2026 CRFC. Tous droits réservés."
+
 [lib]
 name = "crfc_pointage_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]

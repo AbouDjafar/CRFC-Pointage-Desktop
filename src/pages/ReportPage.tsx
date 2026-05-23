@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { CheckCheck, Clock3, Download, FilePlus2, Minus, Plus, RotateCcw, UserMinus, UserPlus, Users } from 'lucide-react'
 import { CenterModal } from '@/components/CenterModal'
 import { FormSelect } from '@/components/FormSelect'
@@ -14,6 +15,7 @@ import { showError, showSuccess } from '@/lib/runtime'
 type ModalType = 'late' | 'absent' | null
 
 export function ReportPage() {
+  const [searchParams] = useSearchParams()
   const { user } = useAuth()
   const {
     employees,
@@ -36,7 +38,10 @@ export function ReportPage() {
   const [absenceComment, setAbsenceComment] = useState('')
   const [search, setSearch] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
-  const activeDate = today()
+
+  const todayDate = today()
+  const activeDate = searchParams.get('date') ?? todayDate
+  const isTodayReport = activeDate === todayDate
   const report = getReportByDate(activeDate)
   const isFinalized = report?.status === 'FINALIZED'
 
@@ -86,6 +91,11 @@ export function ReportPage() {
     }
   }
 
+  async function handleReopen() {
+    if (!report) return
+    await reopenReport(report.id)
+  }
+
   async function submitModal() {
     if (!report || !selectedEmployeeId) return
     if (modalType === 'late') {
@@ -107,14 +117,21 @@ export function ReportPage() {
       <section className="page">
         <header className="page-header hero-header">
           <div>
-            <p className="eyebrow">Rapport du jour</p>
+            <p className="eyebrow">{isTodayReport ? 'Rapport du jour' : 'Rapport editable'}</p>
             <h1>{formatLongDate(activeDate)}</h1>
-            <p>Aucun rapport n&apos;existe encore pour aujourd&apos;hui.</p>
+            <p>{isTodayReport ? "Aucun rapport n'existe encore pour aujourd'hui." : 'Aucun rapport n existe encore pour cette date.'}</p>
           </div>
-          <button className="primary-button button-leading-icon" onClick={handleCreateReport}>
-            <FilePlus2 size={16} />
-            Creer le rapport
-          </button>
+          <div className="header-actions">
+            {!isTodayReport ? (
+              <Link className="ghost-button link-button" to="/historique">
+                Retour a l historique
+              </Link>
+            ) : null}
+            <button className="primary-button button-leading-icon" onClick={handleCreateReport}>
+              <FilePlus2 size={16} />
+              Creer le rapport
+            </button>
+          </div>
         </header>
       </section>
     )
@@ -124,11 +141,16 @@ export function ReportPage() {
     <section className="page">
       <header className="page-header hero-header">
         <div>
-          <p className="eyebrow">Rapport du jour</p>
+          <p className="eyebrow">{isTodayReport ? 'Rapport du jour' : 'Rapport editable'}</p>
           <h1>{formatLongDate(activeDate)}</h1>
-          <p>{isFinalized ? 'Rapport finalise' : 'Rapport en brouillon'}</p>
+          <p>{isFinalized ? 'Rapport finalise' : 'Rapport en brouillon'}{isTodayReport ? '' : ' - modification historique autorisee'}</p>
         </div>
         <div className="header-actions">
+          {!isTodayReport ? (
+            <Link className="ghost-button link-button" to="/historique">
+              Retour a l historique
+            </Link>
+          ) : null}
           <button className="secondary-button button-leading-icon" onClick={handleExportPdf} disabled={pdfLoading}>
             <Download size={16} />
             {pdfLoading ? 'Generation...' : 'Exporter PDF'}
@@ -140,7 +162,7 @@ export function ReportPage() {
             </button>
           ) : null}
           {isFinalized && user?.role === 'ADMIN' ? (
-            <button className="warning-button button-leading-icon" onClick={() => void reopenReport(report.id)}>
+            <button className="warning-button button-leading-icon" onClick={() => void handleReopen()}>
               <RotateCcw size={16} />
               Reouvrir
             </button>

@@ -25,9 +25,12 @@
   "bundle": {
     "active": true,
     "targets": "nsis",
+    "publisher": "CRFC",
+    "copyright": "© 2026 CRFC. Tous droits réservés.",
     "icon": [
       "icons/icon.png",
       "icons/icon.ico"
-    ]
+    ],
+    "shortDescription": "CRFC Pointage Desktop"
   }
 }

@@ -26,6 +26,32 @@ import { useData } from '@/contexts/DataContext'
 import { enumerateDates, formatLongDate, formatShortDate, today } from '@/lib/date'
 
 const REASON_PALETTE = ['#2563EB', '#F97316', '#22C55E', '#8B5CF6', '#E11D48', '#14B8A6', '#D97706', '#0F766E']
+const EVALUATION_META: Record<string, { description: string; formula: string }> = {
+  Ponctualite: {
+    description: 'Mesure la capacite a etre considere comme ponctuel sur les jours suivis.',
+    formula: 'Score = 100 x (jours sans retard ni absence injustifiee / jours avec rapport)',
+  },
+  Presence: {
+    description: 'Mesure la presence reelle en penalisation uniquement des absences injustifiees.',
+    formula: 'Score = 100 x (1 - jours avec absence injustifiee / jours avec rapport)',
+  },
+  Assiduite: {
+    description: 'Mesure les jours ou l employe est present et a l heure, sans aucune absence.',
+    formula: 'Score = 100 x (jours presents et a l heure / jours avec rapport)',
+  },
+  Rigueur: {
+    description: 'Mesure la constance sur plusieurs jours consecutifs sans retard ni absence injustifiee.',
+    formula: 'Score = 100 x (plus longue serie reguliere / min(10, jours avec rapport))',
+  },
+  Discipline: {
+    description: 'Mesure la severite moyenne des retards constates.',
+    formula: 'Score = 100 x (1 - moyenne des minutes de retard / 60), borne entre 0 et 100',
+  },
+  Disponibilite: {
+    description: 'Mesure la disponibilite globale en tenant compte de toutes les absences.',
+    formula: 'Score = 100 x (1 - jours avec absence / jours avec rapport)',
+  },
+}
 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
@@ -189,7 +215,7 @@ export function EmployeeDetailPage() {
     })
 
     const reportDays = Math.max(reportDayTrend.length, 1)
-    const lateDays = reportDayTrend.filter((item) => item.retards > 0).length
+    const punctualDays = reportDayTrend.filter((item) => item.retards === 0 && item.unjustifiedAbsences === 0).length
     const unjustifiedAbsenceDays = reportDayTrend.filter((item) => item.unjustifiedAbsences > 0).length
     const totalAbsenceDays = reportDayTrend.filter((item) => item.absences > 0).length
     const cleanDays = reportDayTrend.filter((item) => item.clean).length
@@ -198,7 +224,7 @@ export function EmployeeDetailPage() {
     let longestCleanStreak = 0
     let currentCleanStreak = 0
     for (const day of reportDayTrend) {
-      if (day.clean) {
+      if (day.retards === 0 && day.unjustifiedAbsences === 0) {
         currentCleanStreak += 1
         longestCleanStreak = Math.max(longestCleanStreak, currentCleanStreak)
       } else {
@@ -207,7 +233,7 @@ export function EmployeeDetailPage() {
     }
 
     const streakBase = Math.max(Math.min(reportDayTrend.length, 10), 1)
-    const punctualityScore = Math.round(Math.max(0, 100 * (1 - lateDays / reportDays)))
+    const punctualityScore = Math.round(100 * (punctualDays / reportDays))
     const presenceScore = Math.round(Math.max(0, 100 * (1 - unjustifiedAbsenceDays / reportDays)))
     const assiduityScore = Math.round(100 * (cleanDays / reportDays))
     const rigorScore = Math.round(Math.min(100, (longestCleanStreak / streakBase) * 100))
@@ -420,7 +446,14 @@ export function EmployeeDetailPage() {
                   <div className="employee-kpi-list">
                     {reporting.evaluationAxes.map((axis) => (
                       <div key={axis.subject} className="employee-kpi-row">
-                        <span>{axis.subject}</span>
+                        <div className="employee-kpi-label">
+                          <span>{axis.subject}</span>
+                          <div className="employee-kpi-tooltip">
+                            <strong>{axis.subject}</strong>
+                            <p>{EVALUATION_META[axis.subject]?.description}</p>
+                            <p>{EVALUATION_META[axis.subject]?.formula}</p>
+                          </div>
+                        </div>
                         <strong>{axis.score}/100</strong>
                       </div>
                     ))}

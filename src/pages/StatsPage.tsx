@@ -19,16 +19,15 @@ import {
 } from 'recharts'
 import { PERIOD_LABELS, PERIOD_OPTIONS, type PeriodMode, getPeriodThreshold } from '@/constants/periods'
 import { useData } from '@/contexts/DataContext'
+import { formatShortDate } from '@/lib/date'
 import { computeGlobalStats } from '@/lib/reporting'
 import type { DailyReport } from '@/types'
 
-const BLUE_PALETTE = ['#1b3a6b', '#2a5298', '#3b6fd4', '#5b8fe8', '#93c5fd']
-const ORANGE_PALETTE = ['#f97316', '#fb923c', '#fdba74', '#fed7aa', '#ffedd5']
 const PIE_PALETTE = ['#1b3a6b', '#f97316', '#22c55e', '#8b5cf6', '#ec4899', '#06b6d4']
 
 function buildDailyTrend(reports: DailyReport[]) {
   return reports.map((report) => ({
-    date: report.date.slice(5),
+    date: formatShortDate(report.date),
     retards: report.lateEntries.length,
     absences: report.absenceEntries.length,
     visiteurs: report.visitorCount,
@@ -97,8 +96,6 @@ export function StatsPage() {
   )
 
   const dailyTrend = useMemo(() => buildDailyTrend(filteredReports), [filteredReports])
-  const topLateData = stats.topLate.map((item) => ({ name: item.name.split(' ')[0], count: item.count }))
-  const topAbsentData = stats.topAbsent.map((item) => ({ name: item.name.split(' ')[0], count: item.count }))
   const reasonsPieData = stats.topReasons.map((item, index) => ({
     name: item.name,
     value: item.count,
@@ -203,80 +200,14 @@ export function StatsPage() {
               <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} allowDecimals={false} />
               <Tooltip content={<CustomTooltip />} />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-              <Area
-                type="monotone"
-                dataKey="retards"
-                name="Retards"
-                stroke="#1b3a6b"
-                strokeWidth={2}
-                fill="url(#gradRetard)"
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 0 }}
-              />
-              <Area
-                type="monotone"
-                dataKey="absences"
-                name="Absences"
-                stroke="#f97316"
-                strokeWidth={2}
-                fill="url(#gradAbsence)"
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 0 }}
-              />
+              <Area type="monotone" dataKey="retards" name="Retards" stroke="#1b3a6b" strokeWidth={2} fill="url(#gradRetard)" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+              <Area type="monotone" dataKey="absences" name="Absences" stroke="#f97316" strokeWidth={2} fill="url(#gradAbsence)" dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       ) : null}
 
       <div className="charts-grid">
-        <div className="chart-card">
-          <p className="chart-title">
-            <span className="chart-title-dot" style={{ background: '#1b3a6b' }} />
-            Top retardataires
-          </p>
-          {topLateData.length === 0 ? (
-            <div className="empty-inline">Aucune donnee pour la periode.</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={topLateData} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#374151', fontWeight: 500 }} tickLine={false} axisLine={false} width={70} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
-                <Bar dataKey="count" name="Retards" radius={[0, 6, 6, 0]}>
-                  {topLateData.map((_, index) => (
-                    <Cell key={index} fill={BLUE_PALETTE[index % BLUE_PALETTE.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        <div className="chart-card">
-          <p className="chart-title">
-            <span className="chart-title-dot" style={{ background: '#f97316' }} />
-            Top absents
-          </p>
-          {topAbsentData.length === 0 ? (
-            <div className="empty-inline">Aucune donnee pour la periode.</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={topAbsentData} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 12, fill: '#374151', fontWeight: 500 }} tickLine={false} axisLine={false} width={70} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
-                <Bar dataKey="count" name="Absences" radius={[0, 6, 6, 0]}>
-                  {topAbsentData.map((_, index) => (
-                    <Cell key={index} fill={ORANGE_PALETTE[index % ORANGE_PALETTE.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
         <div className="chart-card">
           <p className="chart-title">
             <span className="chart-title-dot" style={{ background: '#22c55e' }} />
@@ -287,15 +218,7 @@ export function StatsPage() {
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie
-                  data={reasonsPieData}
-                  cx="50%"
-                  cy="45%"
-                  innerRadius={50}
-                  outerRadius={85}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
+                <Pie data={reasonsPieData} cx="50%" cy="45%" innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value">
                   {reasonsPieData.map((entry, index) => (
                     <Cell key={index} fill={entry.fill} stroke="none" />
                   ))}
@@ -319,15 +242,7 @@ export function StatsPage() {
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Line
-                  type="monotone"
-                  dataKey="minutesRetard"
-                  name="Minutes retard"
-                  stroke="#8b5cf6"
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 0, fill: '#8b5cf6' }}
-                />
+                <Line type="monotone" dataKey="minutesRetard" name="Minutes retard" stroke="#8b5cf6" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 0, fill: '#8b5cf6' }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

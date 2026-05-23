@@ -225,10 +225,16 @@ export function SettingsPage() {
                   <Import size={16} />
                   Importer les employes
                 </button>
+                <div className="settings-note-panel">
+                  <span className="muted">Developpeur</span>
+                  <strong>A. A. Djafar</strong>
+                  <span className="muted">Cadre Informaticien au CRFC</span>
+                  <span className="muted">djafar@crfc.cm</span>
+                </div>
               </div>
             </div>
 
-            <div className="card settings-card wide-card">
+            <div className="card settings-card">
               <div className="card-header">
                 <h2>Utilisateurs</h2>
                 <button className="success-button button-leading-icon" onClick={() => openModal('createUser')}>
@@ -236,12 +242,13 @@ export function SettingsPage() {
                   Nouvel utilisateur
                 </button>
               </div>
-              <div className="table-list">
+              <div className="table-list settings-user-list">
                 {allUsers.filter((item) => item.id !== user.id).map((item) => (
-                  <div key={item.id} className={`table-row${item.isActive ? '' : ' is-inactive'}`}>
-                    <div>
+                  <div key={item.id} className={`table-row settings-user-row${item.isActive ? '' : ' is-inactive'}`}>
+                    <div className="settings-user-meta">
                       <strong>{userFullName(item)}</strong>
-                      <div className="muted">{item.email} - {item.role}</div>
+                      <div className="muted">{item.email}</div>
+                      <div className="muted">{item.role === 'ADMIN' ? 'Administrateur' : 'Agent'} - {item.jobTitle}</div>
                     </div>
                     <div className="table-actions">
                       {!item.isActive ? <span className="status-badge inactive"><Power size={13} />Inactif</span> : null}
@@ -258,17 +265,6 @@ export function SettingsPage() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-
-            <div className="card settings-card wide-card">
-              <div className="card-header">
-                <h2>Informations</h2>
-              </div>
-              <div className="dev-grid">
-                <div><span className="muted">Developpeur</span><strong>A. A. Djafar</strong></div>
-                <div><span className="muted">Role</span><strong>Cadre Informaticien au CRFC</strong></div>
-                <div><span className="muted">Mail</span><strong>djafar@crfc.cm</strong></div>
               </div>
             </div>
           </>
