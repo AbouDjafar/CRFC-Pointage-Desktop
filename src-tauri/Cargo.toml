@@ -8,7 +8,7 @@ InternalName = "crfc-pointage-desktop"
 OriginalFilename = "crfc-pointage-desktop.exe"
 FileDescription = "CRFC Pointage Desktop"
 ProductName = "CRFC Pointage Desktop"
-LegalCopyright = "© 2026 CRFC. Tous droits réservés."
+LegalCopyright = "Copyright (c) 2026 CRFC. Tous droits reserves."
 
 [lib]
 name = "crfc_pointage_desktop_lib"

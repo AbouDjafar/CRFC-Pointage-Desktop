@@ -44,8 +44,8 @@ const EVALUATION_META: Record<string, { description: string; formula: string }> 
     formula: 'Score = 100 x (plus longue serie reguliere / min(10, jours avec rapport))',
   },
   Discipline: {
-    description: 'Mesure la severite moyenne des retards constates.',
-    formula: 'Score = 100 x (1 - moyenne des minutes de retard / 60), borne entre 0 et 100',
+    description: 'Mesure le respect global des regles en tenant compte a la fois de la presence reelle et de la gravite des retards.',
+    formula: 'Score = 100 x taux de presence x ((1 - jours en retard / jours presents) x 0,65 + (1 - moyenne des minutes / 60) x 0,35)',
   },
   Disponibilite: {
     description: 'Mesure la disponibilite globale en tenant compte de toutes les absences.',
@@ -215,9 +215,11 @@ export function EmployeeDetailPage() {
     })
 
     const reportDays = Math.max(reportDayTrend.length, 1)
+    const lateDays = reportDayTrend.filter((item) => item.retards > 0).length
     const punctualDays = reportDayTrend.filter((item) => item.retards === 0 && item.unjustifiedAbsences === 0).length
     const unjustifiedAbsenceDays = reportDayTrend.filter((item) => item.unjustifiedAbsences > 0).length
     const totalAbsenceDays = reportDayTrend.filter((item) => item.absences > 0).length
+    const presenceDays = Math.max(reportDays - totalAbsenceDays, 0)
     const cleanDays = reportDayTrend.filter((item) => item.clean).length
     const averageLateMinutes = totalLate > 0 ? totalLateMin / totalLate : 0
 
@@ -237,7 +239,10 @@ export function EmployeeDetailPage() {
     const presenceScore = Math.round(Math.max(0, 100 * (1 - unjustifiedAbsenceDays / reportDays)))
     const assiduityScore = Math.round(100 * (cleanDays / reportDays))
     const rigorScore = Math.round(Math.min(100, (longestCleanStreak / streakBase) * 100))
-    const disciplineScore = Math.round(Math.max(0, 100 * (1 - Math.min(averageLateMinutes, 60) / 60)))
+    const presenceRate = presenceDays / reportDays
+    const lateRateWhenPresent = presenceDays > 0 ? lateDays / presenceDays : 1
+    const minuteSeverityFactor = Math.max(0, 1 - Math.min(averageLateMinutes, 60) / 60)
+    const disciplineScore = Math.round(Math.max(0, 100 * presenceRate * (((1 - lateRateWhenPresent) * 0.65) + (minuteSeverityFactor * 0.35))))
     const availabilityScore = Math.round(Math.max(0, 100 * (1 - totalAbsenceDays / reportDays)))
 
     const evaluationAxes = [

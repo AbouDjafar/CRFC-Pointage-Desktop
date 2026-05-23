@@ -26,7 +26,10 @@
     "active": true,
     "targets": "nsis",
     "publisher": "CRFC",
-    "copyright": "© 2026 CRFC. Tous droits réservés.",
+    "copyright": "Copyright (c) 2026 CRFC. Tous droits reserves.",
+    "windows": {
+      "signCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ./sign-windows.ps1 %1"
+    },
     "icon": [
       "icons/icon.png",
       "icons/icon.ico"

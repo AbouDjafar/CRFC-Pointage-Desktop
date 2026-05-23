@@ -3,6 +3,8 @@ name: Build Windows App
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -11,6 +13,40 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Compute application version
+        id: app_version
+        shell: pwsh
+        run: |
+          $package = Get-Content package.json | ConvertFrom-Json
+          $parts = $package.version.Split('.')
+          $major = $parts[0]
+          $minor = if ($parts.Length -gt 1) { $parts[1] } else { '1' }
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $appVersion = $env:GITHUB_REF_NAME.Substring(1)
+          } elseif ($env:GITHUB_REF -like 'refs/tags/*') {
+            $appVersion = $env:GITHUB_REF_NAME
+          } else {
+            $appVersion = "$major.$minor.$env:GITHUB_RUN_NUMBER"
+          }
+          "APP_VERSION=$appVersion" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "app_version=$appVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Apply version to app manifests
+        shell: pwsh
+        run: |
+          $appVersion = '${{ steps.app_version.outputs.app_version }}'
+          $package = Get-Content package.json | ConvertFrom-Json
+          $package.version = $appVersion
+          $package | ConvertTo-Json -Depth 100 | Set-Content package.json
+
+          $tauriConfig = Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json
+          $tauriConfig.version = $appVersion
+          $tauriConfig | ConvertTo-Json -Depth 100 | Set-Content src-tauri/tauri.conf.json
+
+          $cargoToml = Get-Content src-tauri/Cargo.toml -Raw
+          $cargoToml = $cargoToml -replace '(?m)^version = ".*"$', "version = `"$appVersion`""
+          Set-Content src-tauri/Cargo.toml $cargoToml
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -33,15 +69,27 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Signing summary
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace('${{ secrets.WINDOWS_CERTIFICATE }}') -or [string]::IsNullOrWhiteSpace('${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}')) {
+            Write-Host 'Code signing: skipped because WINDOWS_CERTIFICATE / WINDOWS_CERTIFICATE_PASSWORD are not configured.'
+          } else {
+            Write-Host 'Code signing: enabled for this build.'
+          }
+
       - name: Build Tauri Windows bundle
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
         with:
           args: --bundles nsis
 
       - name: Upload bundle artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: crfc-pointage-desktop-windows
+          name: crfc-pointage-desktop-windows-${{ steps.app_version.outputs.app_version }}
           path: src-tauri/target/release/bundle/nsis/*
