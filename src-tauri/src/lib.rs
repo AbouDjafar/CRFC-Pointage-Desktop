@@ -542,6 +542,9 @@ pub fn run() {
             let _ = connect(&app.handle());
             Ok(())
         })
+        .on_page_load(|window, _payload| {
+            let _ = window.show();
+        })
         .invoke_handler(tauri::generate_handler![
             load_session,
             save_session,
