@@ -919,6 +919,44 @@ h4 {
   box-shadow: none;
 }
 
+.date-input-shell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 190px;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-radius: var(--radius-md);
+  padding: 0 13px;
+  backdrop-filter: blur(8px);
+}
+
+.date-input-shell input {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  padding: 10px 0;
+  box-shadow: none;
+}
+
+.date-input-shell input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+.date-input-shell input:focus {
+  box-shadow: none;
+}
+
+.report-date-picker {
+  min-width: 190px;
+}
+
+.report-date-picker span {
+  color: rgba(255, 255, 255, 0.76);
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

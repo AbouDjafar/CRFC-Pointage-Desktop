@@ -15,6 +15,7 @@
         "title": "CRFC Pointage Desktop",
         "width": 1440,
         "height": 920,
+        "visible": false,
         "resizable": true
       }
     ],

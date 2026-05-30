@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { CheckCheck, Clock3, Download, FilePlus2, Minus, Plus, RotateCcw, UserMinus, UserPlus, Users } from 'lucide-react'
+import { CalendarDays, CheckCheck, Clock3, Download, FilePlus2, Minus, Plus, RotateCcw, UserMinus, UserPlus, Users } from 'lucide-react'
 import { CenterModal } from '@/components/CenterModal'
 import { FormSelect } from '@/components/FormSelect'
 import { desktopBridge } from '@/bridge'
@@ -15,7 +15,7 @@ import { showError, showSuccess } from '@/lib/runtime'
 type ModalType = 'late' | 'absent' | null
 
 export function ReportPage() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
   const {
     employees,
@@ -38,12 +38,17 @@ export function ReportPage() {
   const [absenceComment, setAbsenceComment] = useState('')
   const [search, setSearch] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [selectedDate, setSelectedDate] = useState(today())
 
   const todayDate = today()
   const activeDate = searchParams.get('date') ?? todayDate
   const isTodayReport = activeDate === todayDate
   const report = getReportByDate(activeDate)
   const isFinalized = report?.status === 'FINALIZED'
+
+  useEffect(() => {
+    setSelectedDate(activeDate)
+  }, [activeDate])
 
   const availableEmployees = useMemo(() => {
     const lateIds = new Set(report?.lateEntries.map((entry) => entry.employeeId) ?? [])
@@ -75,6 +80,15 @@ export function ReportPage() {
 
   async function handleCreateReport() {
     await createOrUpdateReport(activeDate)
+  }
+
+  function handleDateSelection(nextDate: string) {
+    setSelectedDate(nextDate)
+    if (!nextDate || nextDate === todayDate) {
+      setSearchParams({})
+      return
+    }
+    setSearchParams({ date: nextDate })
   }
 
   async function handleExportPdf() {
@@ -122,6 +136,13 @@ export function ReportPage() {
             <p>{isTodayReport ? "Aucun rapport n'existe encore pour aujourd'hui." : 'Aucun rapport n existe encore pour cette date.'}</p>
           </div>
           <div className="header-actions">
+            <label className="field report-date-picker">
+              <span>Date du rapport</span>
+              <div className="date-input-shell">
+                <CalendarDays size={16} />
+                <input type="date" value={selectedDate} onChange={(event) => handleDateSelection(event.target.value)} />
+              </div>
+            </label>
             {!isTodayReport ? (
               <Link className="ghost-button link-button" to="/historique">
                 Retour a l historique
@@ -146,6 +167,13 @@ export function ReportPage() {
           <p>{isFinalized ? 'Rapport finalise' : 'Rapport en brouillon'}{isTodayReport ? '' : ' - modification historique autorisee'}</p>
         </div>
         <div className="header-actions">
+          <label className="field report-date-picker">
+            <span>Date du rapport</span>
+            <div className="date-input-shell">
+              <CalendarDays size={16} />
+              <input type="date" value={selectedDate} onChange={(event) => handleDateSelection(event.target.value)} />
+            </div>
+          </label>
           {!isTodayReport ? (
             <Link className="ghost-button link-button" to="/historique">
               Retour a l historique
