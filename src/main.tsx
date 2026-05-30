@@ -53,14 +53,4 @@ try {
   throw error
 }
 
-function revealBootScreen() {
-  window.requestAnimationFrame(() => {
-    document.body.classList.add('boot-ready')
-    window.setTimeout(() => {
-      document.getElementById('boot-splash')?.remove()
-    }, 420)
-  })
-}
-
 void writeDesktopLog('info', 'Frontend bootstrap started')
-void revealBootScreen()

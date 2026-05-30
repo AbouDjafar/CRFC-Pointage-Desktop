@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 use tauri::Manager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -546,6 +548,22 @@ fn write_frontend_log(level: String, message: String, details: Option<String>) -
     Ok(())
 }
 
+#[tauri::command]
+fn complete_startup(app: tauri::AppHandle) -> Result<(), String> {
+    logging::log_info("BOOT", "Frontend reported startup complete");
+
+    if let Some(main_window) = app.get_webview_window("main") {
+        let _ = main_window.show();
+        let _ = main_window.set_focus();
+    }
+
+    if let Some(splash_window) = app.get_webview_window("splashscreen") {
+        let _ = splash_window.close();
+    }
+
+    Ok(())
+}
+
 pub fn init_runtime_logging() -> Option<PathBuf> {
     logging::init_runtime_logging()
 }
@@ -571,11 +589,26 @@ pub fn run() -> Result<(), String> {
                 }
                 Err(error) => logging::log_error("DATABASE", &format!("Setup database initialization failed: {error}")),
             }
+
+            let app_handle = app.handle().clone();
+            thread::spawn(move || {
+                thread::sleep(Duration::from_secs(15));
+                let splash_open = app_handle.get_webview_window("splashscreen").is_some();
+                if splash_open {
+                    logging::log_error("BOOT", "Startup timeout reached, forcing main window visible");
+                    if let Some(main_window) = app_handle.get_webview_window("main") {
+                        let _ = main_window.show();
+                    }
+                    if let Some(splash_window) = app_handle.get_webview_window("splashscreen") {
+                        let _ = splash_window.close();
+                    }
+                }
+            });
+
             Ok(())
         })
         .on_page_load(|window, _payload| {
             logging::log_info("BOOT", &format!("Window '{}' page loaded", window.label()));
-            let _ = window.show();
         })
         .invoke_handler(tauri::generate_handler![
             load_session,
@@ -596,7 +629,8 @@ pub fn run() -> Result<(), String> {
             pick_import_file,
             save_pdf_and_reveal,
             save_excel_and_reveal,
-            write_frontend_log
+            write_frontend_log,
+            complete_startup
         ])
         .run(tauri::generate_context!())
         .map_err(|error| {
