@@ -1,3 +1,5 @@
+mod logging;
+
 use dirs::document_dir;
 use rfd::FileDialog;
 use rusqlite::{params, Connection};
@@ -115,6 +117,7 @@ fn database_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 fn connect(app: &tauri::AppHandle) -> Result<Connection, String> {
     let path = database_path(app)?;
+    logging::log_info("DATABASE", &format!("Opening database at {}", path.display()));
     let connection = Connection::open(path).map_err(|error| error.to_string())?;
     init_schema(&connection)?;
     Ok(connection)
@@ -507,6 +510,7 @@ fn save_binary_and_reveal(subfolder: &str, file_name: &str, bytes: Vec<u8>) -> R
     let path = documents_target(subfolder, file_name)?;
     fs::write(&path, bytes).map_err(|error| error.to_string())?;
     reveal_file(&path)?;
+    logging::log_info("EXPORT", &format!("Generated file at {}", path.display()));
     Ok(SaveRevealResult { path: path.to_string_lossy().to_string() })
 }
 
@@ -536,13 +540,41 @@ fn pick_import_file(extensions: Vec<String>) -> Result<Option<PickedImportFile>,
     }
 }
 
-pub fn run() {
+#[tauri::command]
+fn write_frontend_log(level: String, message: String, details: Option<String>) -> Result<(), String> {
+    logging::log_frontend(&level, &message, details.as_deref());
+    Ok(())
+}
+
+pub fn init_runtime_logging() -> Option<PathBuf> {
+    logging::init_runtime_logging()
+}
+
+pub fn log_boot_info(message: &str) {
+    logging::log_info("BOOT", message);
+}
+
+pub fn log_boot_error(message: &str) {
+    logging::log_error("BOOT", message);
+}
+
+pub fn run() -> Result<(), String> {
+    logging::log_info("BOOT", "Starting Tauri runtime");
     tauri::Builder::default()
         .setup(|app| {
-            let _ = connect(&app.handle());
+            logging::log_info("BOOT", "Running Tauri setup hook");
+            match connect(&app.handle()) {
+                Ok(_) => {
+                    if let Ok(path) = database_path(&app.handle()) {
+                        logging::log_info("DATABASE", &format!("Database ready at {}", path.display()));
+                    }
+                }
+                Err(error) => logging::log_error("DATABASE", &format!("Setup database initialization failed: {error}")),
+            }
             Ok(())
         })
         .on_page_load(|window, _payload| {
+            logging::log_info("BOOT", &format!("Window '{}' page loaded", window.label()));
             let _ = window.show();
         })
         .invoke_handler(tauri::generate_handler![
@@ -563,8 +595,13 @@ pub fn run() {
             save_app_settings,
             pick_import_file,
             save_pdf_and_reveal,
-            save_excel_and_reveal
+            save_excel_and_reveal,
+            write_frontend_log
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .map_err(|error| {
+            let message = error.to_string();
+            logging::log_error("BOOT", &format!("Tauri runtime failed: {message}"));
+            message
+        })
 }
