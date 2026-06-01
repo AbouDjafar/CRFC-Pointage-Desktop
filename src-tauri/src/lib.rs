@@ -91,6 +91,9 @@ struct DailyReport {
     created_by: String,
     created_at: String,
     updated_at: String,
+    pdf_uri: Option<String>,
+    pdf_file_name: Option<String>,
+    pdf_generated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,7 +168,10 @@ fn init_schema(connection: &Connection) -> Result<(), String> {
               intro_text TEXT NOT NULL,
               created_by TEXT NOT NULL,
               created_at TEXT NOT NULL,
-              updated_at TEXT NOT NULL
+              updated_at TEXT NOT NULL,
+              pdf_uri TEXT,
+              pdf_file_name TEXT,
+              pdf_generated_at TEXT
             );
             CREATE TABLE IF NOT EXISTS late_entries (
               id TEXT PRIMARY KEY,
@@ -192,7 +198,25 @@ fn init_schema(connection: &Connection) -> Result<(), String> {
             );
         "#,
         )
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+
+    ensure_report_column(connection, "pdf_uri", "TEXT")?;
+    ensure_report_column(connection, "pdf_file_name", "TEXT")?;
+    ensure_report_column(connection, "pdf_generated_at", "TEXT")?;
+    Ok(())
+}
+
+fn ensure_report_column(connection: &Connection, column: &str, definition: &str) -> Result<(), String> {
+    let sql = format!("ALTER TABLE reports ADD COLUMN {column} {definition}");
+    match connection.execute(&sql, []) {
+        Ok(_) => Ok(()),
+        Err(rusqlite::Error::SqliteFailure(error, _))
+            if error.extended_code == rusqlite::ffi::SQLITE_ERROR =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 fn save_json<T: Serialize>(connection: &Connection, key: &str, value: &T) -> Result<(), String> {
@@ -437,7 +461,7 @@ fn get_reports(app: tauri::AppHandle) -> Result<Vec<DailyReport>, String> {
         absence_entries_by_report.entry(report_id).or_default().push(entry);
     }
 
-    let mut statement = connection.prepare("SELECT id, date, status, visitor_count, intro_text, created_by, created_at, updated_at FROM reports ORDER BY date ASC").map_err(|error| error.to_string())?;
+    let mut statement = connection.prepare("SELECT id, date, status, visitor_count, intro_text, created_by, created_at, updated_at, pdf_uri, pdf_file_name, pdf_generated_at FROM reports ORDER BY date ASC").map_err(|error| error.to_string())?;
     let rows = statement.query_map([], |row| {
         let report_id: String = row.get(0)?;
         Ok(DailyReport {
@@ -451,6 +475,9 @@ fn get_reports(app: tauri::AppHandle) -> Result<Vec<DailyReport>, String> {
             created_by: row.get(5)?,
             created_at: row.get(6)?,
             updated_at: row.get(7)?,
+            pdf_uri: row.get(8)?,
+            pdf_file_name: row.get(9)?,
+            pdf_generated_at: row.get(10)?,
         })
     }).map_err(|error| error.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
@@ -465,8 +492,8 @@ fn save_reports(app: tauri::AppHandle, reports: Vec<DailyReport>) -> Result<(), 
     transaction.execute("DELETE FROM reports", []).map_err(|error| error.to_string())?;
     for report in reports {
         transaction.execute(
-            "INSERT INTO reports (id, date, status, visitor_count, intro_text, created_by, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![report.id, report.date, report.status, report.visitor_count, report.intro_text, report.created_by, report.created_at, report.updated_at],
+            "INSERT INTO reports (id, date, status, visitor_count, intro_text, created_by, created_at, updated_at, pdf_uri, pdf_file_name, pdf_generated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![report.id, report.date, report.status, report.visitor_count, report.intro_text, report.created_by, report.created_at, report.updated_at, report.pdf_uri, report.pdf_file_name, report.pdf_generated_at],
         ).map_err(|error| error.to_string())?;
         for entry in report.late_entries {
             transaction.execute(
@@ -508,12 +535,22 @@ fn reveal_file(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn save_binary_and_reveal(subfolder: &str, file_name: &str, bytes: Vec<u8>) -> Result<SaveRevealResult, String> {
+fn save_binary(subfolder: &str, file_name: &str, bytes: Vec<u8>) -> Result<SaveRevealResult, String> {
     let path = documents_target(subfolder, file_name)?;
     fs::write(&path, bytes).map_err(|error| error.to_string())?;
-    reveal_file(&path)?;
     logging::log_info("EXPORT", &format!("Generated file at {}", path.display()));
     Ok(SaveRevealResult { path: path.to_string_lossy().to_string() })
+}
+
+fn save_binary_and_reveal(subfolder: &str, file_name: &str, bytes: Vec<u8>) -> Result<SaveRevealResult, String> {
+    let result = save_binary(subfolder, file_name, bytes)?;
+    reveal_file(Path::new(&result.path))?;
+    Ok(result)
+}
+
+#[tauri::command]
+fn save_pdf_file(file_name: String, bytes: Vec<u8>) -> Result<SaveRevealResult, String> {
+    save_binary("Rapports PDF", &file_name, bytes)
 }
 
 #[tauri::command]
@@ -524,6 +561,41 @@ fn save_pdf_and_reveal(file_name: String, bytes: Vec<u8>) -> Result<SaveRevealRe
 #[tauri::command]
 fn save_excel_and_reveal(file_name: String, bytes: Vec<u8>) -> Result<SaveRevealResult, String> {
     save_binary_and_reveal("Syntheses Excel", &file_name, bytes)
+}
+
+#[tauri::command]
+fn saved_file_exists(path: Option<String>) -> Result<bool, String> {
+    let Some(path) = path.filter(|value| !value.trim().is_empty()) else {
+        return Ok(false);
+    };
+
+    match fs::metadata(&path) {
+        Ok(metadata) => Ok(metadata.is_file()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
+fn reveal_saved_file(path: String) -> Result<SaveRevealResult, String> {
+    reveal_file(Path::new(&path))?;
+    Ok(SaveRevealResult { path })
+}
+
+#[tauri::command]
+fn delete_saved_file(path: Option<String>) -> Result<(), String> {
+    let Some(path) = path.filter(|value| !value.trim().is_empty()) else {
+        return Ok(());
+    };
+
+    match fs::remove_file(&path) {
+        Ok(_) => {
+            logging::log_info("EXPORT", &format!("Deleted stored file at {}", path));
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 #[tauri::command]
@@ -627,6 +699,10 @@ pub fn run() -> Result<(), String> {
             get_app_settings,
             save_app_settings,
             pick_import_file,
+            saved_file_exists,
+            reveal_saved_file,
+            delete_saved_file,
+            save_pdf_file,
             save_pdf_and_reveal,
             save_excel_and_reveal,
             write_frontend_log,

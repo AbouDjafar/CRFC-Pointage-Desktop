@@ -25,6 +25,10 @@ export const tauriBridge: DesktopBridge = {
     if (!result) return null
     return { name: result.name, path: result.path, bytes: new Uint8Array(result.bytes) } satisfies PickedImportFile
   },
+  savedFileExists(path?: string | null) { return invoke<boolean>('saved_file_exists', { path }) },
+  revealSavedFile(path: string) { return invoke<SaveRevealResult>('reveal_saved_file', { path }) },
+  deleteSavedFile(path?: string | null) { return invoke('delete_saved_file', { path }) },
+  savePdfFile(fileName: string, bytes: Uint8Array) { return invoke<SaveRevealResult>('save_pdf_file', { fileName, bytes: Array.from(bytes) }) },
   savePdfAndReveal(fileName: string, bytes: Uint8Array) { return invoke<SaveRevealResult>('save_pdf_and_reveal', { fileName, bytes: Array.from(bytes) }) },
   saveExcelAndReveal(fileName: string, bytes: Uint8Array) { return invoke<SaveRevealResult>('save_excel_and_reveal', { fileName, bytes: Array.from(bytes) }) },
 }

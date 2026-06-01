@@ -1,18 +1,15 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCheck, Download, RotateCcw, Trash2 } from 'lucide-react'
-import { desktopBridge } from '@/bridge'
 import { useAuth, userFullName } from '@/contexts/AuthContext'
 import { useData } from '@/contexts/DataContext'
 import { formatDateTime, formatLongDate } from '@/lib/date'
-import { buildPdfFileName } from '@/lib/exportNames'
-import { generatePdfBytes } from '@/lib/pdf'
 import { askConfirmation, showError, showSuccess } from '@/lib/runtime'
 
 export function ReportDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams()
   const { user, getUserById } = useAuth()
-  const { reports, employees, absenceReasons, deleteReport, finalizeReport, reopenReport } = useData()
+  const { reports, employees, absenceReasons, deleteReport, finalizeReport, reopenReport, openReportPdf } = useData()
   const matchedReport = reports.find((item) => item.id === id)
   if (!matchedReport) return <section className="page"><div className="card">Rapport introuvable.</div></section>
   const report = matchedReport
@@ -20,11 +17,14 @@ export function ReportDetailPage() {
 
   async function exportPdf() {
     try {
-      const bytes = await generatePdfBytes({ report, employees, absenceReasons, author: author ?? user! })
-      const result = await desktopBridge.savePdfAndReveal(buildPdfFileName(report.date), bytes)
-      showSuccess(`PDF genere: ${result.path}`)
+      const result = await openReportPdf(report.id, author ?? user!)
+      if (!result.success) {
+        showError(result.error ?? 'Impossible d ouvrir le PDF.')
+      } else {
+        showSuccess(result.generated ? 'PDF genere et ouvert.' : 'PDF existant ouvert.')
+      }
     } catch (error) {
-      showError(error instanceof Error ? error.message : 'Impossible de generer le PDF.')
+      showError(error instanceof Error ? error.message : 'Impossible d ouvrir le PDF.')
     }
   }
 
@@ -55,10 +55,21 @@ export function ReportDetailPage() {
           {report.status === 'DRAFT' ? (
             <>
               <button className="warning-button button-leading-icon" onClick={() => void reopenForEditing()}>
-                <RotateCcw size={16} />
-                Reouvrir
-              </button>
-              <button className="primary-button button-leading-icon" onClick={() => void finalizeReport(report.id)}>
+              <RotateCcw size={16} />
+              Reouvrir
+            </button>
+              <button className="primary-button button-leading-icon" onClick={async () => {
+                const pdfAuthor = author ?? user
+                if (!pdfAuthor) return
+                const result = await finalizeReport(report.id, pdfAuthor)
+                if (!result.success) {
+                  showError(result.error ?? 'Impossible de finaliser le rapport.')
+                } else if (!result.pdfGenerated && result.error) {
+                  showSuccess(`Rapport finalise. ${result.error}`)
+                } else {
+                  showSuccess('Rapport finalise et PDF genere.')
+                }
+              }}>
                 <CheckCheck size={16} />
                 Finaliser
               </button>

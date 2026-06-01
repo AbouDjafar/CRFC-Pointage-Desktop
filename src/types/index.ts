@@ -66,6 +66,9 @@ export interface DailyReport {
   createdBy: string
   createdAt: string
   updatedAt: string
+  pdfUri?: string
+  pdfFileName?: string
+  pdfGeneratedAt?: string
 }
 
 export interface PickedImportFile {

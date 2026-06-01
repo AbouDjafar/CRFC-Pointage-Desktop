@@ -48,7 +48,7 @@ function buildCityLine(date: string) {
   const [year, month, day] = date.split('-').map(Number)
   const obj = new Date(year, month - 1, day)
   const monthName = obj.toLocaleDateString('fr-FR', { month: 'long' })
-  return `Yaounde, le ${day} ${monthName} ${year}`
+  return `Yaoundé, le ${day} ${monthName} ${year}`
 }
 
 function buildIntroParagraphs(date: string) {
@@ -56,13 +56,13 @@ function buildIntroParagraphs(date: string) {
   const dateObj = new Date(year, month - 1, day)
   const fullDate = dateObj.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
   return [
-    'Dans le cadre des missions qui sont a ma charge, je viens par la presente vous faire le point sur les presences du jour.',
-    `Vous trouverez ci-apres la liste des retards, des absences et des visiteurs de la journee du ${fullDate}.`,
+    'Dans le cadre des missions qui sont à ma charge, je viens par la présente vous faire le point sur les présences du jour.',
+    `Vous trouverez-ci après la liste des retards, des absences et des visiteurs de la journée du ${fullDate}.`,
   ]
 }
 
 function numberToFrench(n: number): string {
-  const units = ['zero', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize']
+  const units = ['zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize']
   if (n <= 16) return units[n]
   if (n < 20) return `dix-${units[n - 10]}`
   if (n < 70) {
@@ -82,11 +82,15 @@ function numberToFrench(n: number): string {
     if (rest === 0) return hundred > 1 ? `${prefix}s` : prefix
     return `${prefix} ${numberToFrench(rest)}`
   }
-  return String(n)
+  const thousand = Math.floor(n / 1000)
+  const rest = n % 1000
+  const prefix = thousand === 1 ? 'mille' : `${numberToFrench(thousand)} mille`
+  if (rest === 0) return prefix
+  return `${prefix} ${numberToFrench(rest)}`
 }
 
 function buildVisitorsSentence(count: number) {
-  return `Les visiteurs enregistres en ce jour sont au nombre de ${numberToFrench(Math.max(0, count))} (${count}) personnes.`
+  return `Les visiteurs enregistrés en ce jour sont au nombre de ${numberToFrench(Math.max(0, count))} (${count}) personnes.`
 }
 
 function formatArrival(time: string) {
@@ -189,9 +193,9 @@ export async function generatePdfBytes(params: {
   y -= 16
   page.drawText("L'attention de Monsieur le Coordonnateur National", { x: 315, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
   y -= 16
-  page.drawText('du Centre de Reseaux des Filieres de Croissance (CRFC) au Cameroun', { x: 250, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
+  page.drawText('du Centre de Réseaux des Filières de Croissance (CRFC) au Cameroun', { x: 250, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
   y -= 28
-  page.drawText('Objet : Compte rendu de la journee', { x: 54, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
+  page.drawText('Objet : Compte rendu de la journée', { x: 54, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
   y -= 28
   page.drawText('Monsieur le Coordonnateur National,', { x: 54, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
   y -= 22
@@ -234,17 +238,17 @@ export async function generatePdfBytes(params: {
     }
   }
 
-  drawTableSection('Retards', ['Ndeg', 'NOMS ET PRENOMS', "HEURE D'ARRIVEE"], lateRows)
-  drawTableSection('Absents', ['Ndeg', 'NOMS ET PRENOMS', 'MOTIF'], absenceRows)
+  drawTableSection('Retards', ['N°', 'NOMS ET PRÉNOMS', "HEURE D’ARRIVÉE"], lateRows)
+  drawTableSection('Absents', ['N°', 'NOMS ET PRÉNOMS', 'MOTIF'], absenceRows)
 
   ensureSpace(80)
   y -= 14
-  page.drawText('Visiteurs enregistres', { x: 238, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
+  page.drawText('Visiteurs enregistrés', { x: 238, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
   y -= 18
   y = drawWrappedText(page, buildVisitorsSentence(report.visitorCount), TEXT_X, y, CONTENT_WIDTH, font, 11, 15)
   y -= 8
   ensureSpace(60)
-  y = drawWrappedText(page, "Dans l'attente de vos instructions, je vous prie d'agreer Monsieur le Coordonnateur National, l'expression de mon profond respect.", TEXT_X, y, CONTENT_WIDTH, font, 11, 15)
+  y = drawWrappedText(page, "Dans l'attente de vos instructions, je vous prie d'agréer Monsieur le Coordonnateur National, l'expression de mon profond respect.", TEXT_X, y, CONTENT_WIDTH, font, 11, 15)
   y -= 12
   ensureSpace(40)
   page.drawText(`${author.firstName} ${author.lastName}`.trim(), { x: 392, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })

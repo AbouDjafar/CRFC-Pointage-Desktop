@@ -17,13 +17,20 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { PERIOD_LABELS, PERIOD_OPTIONS, type PeriodMode, getPeriodThreshold } from '@/constants/periods'
+import { PERIOD_OPTIONS, type PeriodMode } from '@/constants/periods'
 import { useData } from '@/contexts/DataContext'
 import { formatShortDate } from '@/lib/date'
+import { sliceRecentReports } from '@/lib/reportFilters'
 import { computeGlobalStats } from '@/lib/reporting'
 import type { DailyReport } from '@/types'
 
 const PIE_PALETTE = ['#1b3a6b', '#f97316', '#22c55e', '#8b5cf6', '#ec4899', '#06b6d4']
+const STATS_SCOPE_LABELS: Record<PeriodMode, string> = {
+  '7d': '7 derniers rapports',
+  '30d': '30 derniers rapports',
+  '90d': '90 derniers rapports',
+  all: 'Tous les rapports',
+}
 
 function buildDailyTrend(reports: DailyReport[]) {
   return reports.map((report) => ({
@@ -83,12 +90,9 @@ export function StatsPage() {
   const { reports, employees, absenceReasons } = useData()
   const [period, setPeriod] = useState<PeriodMode>('30d')
 
-  const threshold = useMemo(() => getPeriodThreshold(period), [period])
-
   const filteredReports = useMemo(() => {
-    const scoped = threshold ? reports.filter((report) => report.date >= threshold) : reports
-    return [...scoped].sort((a, b) => a.date.localeCompare(b.date))
-  }, [reports, threshold])
+    return sliceRecentReports(reports, period)
+  }, [period, reports])
 
   const stats = useMemo(
     () => computeGlobalStats(filteredReports, employees, absenceReasons),
@@ -114,7 +118,7 @@ export function StatsPage() {
             {filteredReports.length} rapport{filteredReports.length > 1 ? 's' : ''} analyse
             {filteredReports.length > 1 ? 's' : ''}
           </h1>
-          <p>{PERIOD_LABELS[period]} - Vue d&apos;ensemble des retards, absences et visiteurs.</p>
+          <p>{STATS_SCOPE_LABELS[period]} - Vue d&apos;ensemble des retards, absences et visiteurs.</p>
         </div>
       </header>
 

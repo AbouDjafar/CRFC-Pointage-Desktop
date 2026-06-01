@@ -17,6 +17,10 @@ export interface DesktopBridge {
   getAppSettings(): Promise<AppSettings>
   saveAppSettings(settings: AppSettings): Promise<void>
   pickImportFile(extensions: string[]): Promise<PickedImportFile | null>
+  savedFileExists(path?: string | null): Promise<boolean>
+  revealSavedFile(path: string): Promise<SaveRevealResult>
+  deleteSavedFile(path?: string | null): Promise<void>
+  savePdfFile(fileName: string, bytes: Uint8Array): Promise<SaveRevealResult>
   savePdfAndReveal(fileName: string, bytes: Uint8Array): Promise<SaveRevealResult>
   saveExcelAndReveal(fileName: string, bytes: Uint8Array): Promise<SaveRevealResult>
 }

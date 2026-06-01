@@ -39,6 +39,18 @@ function downloadBytes(fileName: string, bytes: Uint8Array, mimeType: string) {
   return { path: `download://${fileName}` }
 }
 
+async function savedFileExists() {
+  return false
+}
+
+async function revealSavedFile(path: string) {
+  return { path }
+}
+
+async function deleteSavedFile() {
+  return
+}
+
 async function pickImportFile(extensions: string[]): Promise<PickedImportFile | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input')
@@ -70,6 +82,10 @@ export const browserBridge: DesktopBridge = {
   async getAppSettings() { return loadJson<AppSettings>(storageKeys.appSettings, DEFAULT_APP_SETTINGS) },
   async saveAppSettings(settings: AppSettings) { saveJson(storageKeys.appSettings, settings) },
   pickImportFile,
+  savedFileExists,
+  revealSavedFile,
+  deleteSavedFile,
+  async savePdfFile(fileName, bytes) { return downloadBytes(fileName, bytes, 'application/pdf') },
   async savePdfAndReveal(fileName, bytes) { return downloadBytes(fileName, bytes, 'application/pdf') },
   async saveExcelAndReveal(fileName, bytes) { return downloadBytes(fileName, bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') },
 }

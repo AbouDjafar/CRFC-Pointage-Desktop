@@ -3,7 +3,7 @@ import { buildExcelFileName, buildPdfFileName } from '@/lib/exportNames'
 
 describe('export naming', () => {
   it('builds the pdf file name', () => {
-    expect(buildPdfFileName('2026-05-21')).toBe('rapport-pointage-2026-05-21.pdf')
+    expect(buildPdfFileName('2026-05-21')).toBe('rapport_pointage_2026_05_21.pdf')
   })
 
   it('builds the excel file name', () => {

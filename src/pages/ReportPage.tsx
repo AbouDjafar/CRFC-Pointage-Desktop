@@ -3,12 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { CalendarDays, CheckCheck, Clock3, Download, FilePlus2, Minus, Plus, RotateCcw, UserMinus, UserPlus, Users } from 'lucide-react'
 import { CenterModal } from '@/components/CenterModal'
 import { FormSelect } from '@/components/FormSelect'
-import { desktopBridge } from '@/bridge'
 import { useAuth } from '@/contexts/AuthContext'
 import { useData } from '@/contexts/DataContext'
 import { formatLongDate, today } from '@/lib/date'
-import { buildPdfFileName } from '@/lib/exportNames'
-import { generatePdfBytes } from '@/lib/pdf'
 import { employeeMatchesQuery } from '@/lib/reporting'
 import { showError, showSuccess } from '@/lib/runtime'
 
@@ -16,7 +13,7 @@ type ModalType = 'late' | 'absent' | null
 
 export function ReportPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { user } = useAuth()
+  const { user, getUserById } = useAuth()
   const {
     employees,
     absenceReasons,
@@ -30,6 +27,7 @@ export function ReportPage() {
     setVisitorCount,
     finalizeReport,
     reopenReport,
+    openReportPdf,
   } = useData()
   const [modalType, setModalType] = useState<ModalType>(null)
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('')
@@ -95,11 +93,15 @@ export function ReportPage() {
     if (!report || !user) return
     setPdfLoading(true)
     try {
-      const bytes = await generatePdfBytes({ report, employees, absenceReasons, author: user })
-      const result = await desktopBridge.savePdfAndReveal(buildPdfFileName(report.date), bytes)
-      showSuccess(`PDF genere: ${result.path}`)
+      const pdfAuthor = getUserById(report.createdBy) ?? user
+      const result = await openReportPdf(report.id, pdfAuthor)
+      if (!result.success) {
+        showError(result.error ?? 'Impossible d ouvrir le PDF.')
+      } else {
+        showSuccess(result.generated ? 'PDF genere et ouvert.' : 'PDF existant ouvert.')
+      }
     } catch (error) {
-      showError(error instanceof Error ? error.message : 'Impossible de generer le PDF.')
+      showError(error instanceof Error ? error.message : 'Impossible d ouvrir le PDF.')
     } finally {
       setPdfLoading(false)
     }
@@ -184,7 +186,17 @@ export function ReportPage() {
             {pdfLoading ? 'Generation...' : 'Exporter PDF'}
           </button>
           {!isFinalized ? (
-            <button className="primary-button button-leading-icon" onClick={() => void finalizeReport(report.id)}>
+            <button className="primary-button button-leading-icon" onClick={async () => {
+              if (!user) return
+              const result = await finalizeReport(report.id, user)
+              if (!result.success) {
+                showError(result.error ?? 'Impossible de finaliser le rapport.')
+              } else if (!result.pdfGenerated && result.error) {
+                showSuccess(`Rapport finalise. ${result.error}`)
+              } else {
+                showSuccess('Rapport finalise et PDF genere.')
+              }
+            }}>
               <CheckCheck size={16} />
               Finaliser
             </button>
