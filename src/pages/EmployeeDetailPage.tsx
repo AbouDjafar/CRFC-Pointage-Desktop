@@ -23,6 +23,7 @@ import {
 } from 'recharts'
 import { PERIOD_LABELS, PERIOD_OPTIONS, type PeriodMode, getPeriodThreshold } from '@/constants/periods'
 import { useData } from '@/contexts/DataContext'
+import { getAbsenceReasonLabel } from '@/lib/absenceReasons'
 import { enumerateDates, formatLongDate, formatShortDate, today } from '@/lib/date'
 
 const REASON_PALETTE = ['#2563EB', '#F97316', '#22C55E', '#8B5CF6', '#E11D48', '#14B8A6', '#D97706', '#0F766E']
@@ -143,7 +144,6 @@ export function EmployeeDetailPage() {
       }
 
       for (const entry of absenceEntries) {
-        const reason = absenceReasons.find((item) => item.id === entry.reasonId)
         totalAbsent += 1
         current.absenceCount += 1
         if (unjustifiedReasonIds.has(entry.reasonId)) current.unjustifiedAbsenceCount += 1
@@ -153,7 +153,7 @@ export function EmployeeDetailPage() {
           date: report.date,
           type: 'absence',
           title: 'Absence',
-          detail: reason?.label ?? 'Motif inconnu',
+          detail: getAbsenceReasonLabel(absenceReasons, entry.reasonId),
           note: entry.comment,
           color: reasonColors[entry.reasonId] ?? '#ef4444',
         })
@@ -200,10 +200,9 @@ export function EmployeeDetailPage() {
     const topReasons = Object.entries(reasonCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([reasonId, count]) => {
-        const reason = absenceReasons.find((item) => item.id === reasonId)
         return {
           id: reasonId,
-          label: reason?.label ?? 'Motif inconnu',
+          label: getAbsenceReasonLabel(absenceReasons, reasonId),
           value: count,
           fill: reasonColors[reasonId] ?? '#ef4444',
         }

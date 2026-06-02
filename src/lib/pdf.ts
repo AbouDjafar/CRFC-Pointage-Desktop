@@ -1,25 +1,13 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import html2canvas from 'html2canvas'
+import { PDFDocument } from 'pdf-lib'
 import type { AbsenceReason, DailyReport, Employee, User } from '@/types'
 
-const PAGE_WIDTH = 595.28
-const PAGE_HEIGHT = 841.89
-const START_Y = 729
-const MIN_Y = 118
-const LEFT_X = 54
-const TEXT_X = 68
-const CONTENT_WIDTH = 470
-const TABLE_WIDTHS = [42, 290, 160]
+const A4_WIDTH_PT = 595.28
+const A4_HEIGHT_PT = 841.89
+const MALE_VALUES = new Set(['masculin', 'homme', 'm'])
+const FEMALE_VALUES = new Set(['feminin', 'féminin', 'femme', 'f'])
 
-let backgroundBytesPromise: Promise<Uint8Array> | null = null
-
-async function loadBackgroundBytes() {
-  if (!backgroundBytesPromise) {
-    backgroundBytesPromise = fetch('/assets/crfc_template_background.jpg')
-      .then((response) => response.arrayBuffer())
-      .then((buffer) => new Uint8Array(buffer))
-  }
-  return backgroundBytesPromise
-}
+let backgroundAssetPromise: Promise<{ dataUrl: string; bytes: Uint8Array }> | null = null
 
 function normalizeGender(value: string | undefined): string {
   return (value ?? '')
@@ -29,139 +17,434 @@ function normalizeGender(value: string | undefined): string {
     .toLowerCase()
 }
 
-function hasCivilitePrefix(value: string): boolean {
-  const normalized = normalizeGender(value)
+function hasPdfPrefix(value: string): boolean {
+  const normalized = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
   return normalized.startsWith('m. ') || normalized.startsWith('mme. ')
 }
 
 function formatEmployeeNameForPdf(employee: Employee | undefined, fallback?: string): string {
   const baseName = (employee?.fullName ?? fallback ?? 'Inconnu').trim()
-  if (!baseName || !employee || hasCivilitePrefix(baseName)) return baseName || 'Inconnu'
+  if (!baseName || !employee || hasPdfPrefix(baseName)) {
+    return baseName || 'Inconnu'
+  }
+
   const employeeWithGender = employee as Employee & { sex?: string }
   const gender = normalizeGender(employeeWithGender.sex)
-  if (gender === 'masculin' || gender === 'homme' || gender === 'm') return `M. ${baseName}`
-  if (gender === 'feminin' || gender === 'femme' || gender === 'f') return `Mme. ${baseName}`
+  if (MALE_VALUES.has(gender)) return `M. ${baseName}`
+  if (FEMALE_VALUES.has(gender)) return `Mme. ${baseName}`
   return baseName
 }
 
-function buildCityLine(date: string) {
+function buildCityLine(date: string): string {
   const [year, month, day] = date.split('-').map(Number)
-  const obj = new Date(year, month - 1, day)
-  const monthName = obj.toLocaleDateString('fr-FR', { month: 'long' })
+  const value = new Date(year, month - 1, day)
+  const monthName = value.toLocaleDateString('fr-FR', { month: 'long' })
   return `Yaoundé, le ${day} ${monthName} ${year}`
 }
 
-function buildIntroParagraphs(date: string) {
-  const [year, month, day] = date.split('-').map(Number)
-  const dateObj = new Date(year, month - 1, day)
-  const fullDate = dateObj.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-  return [
-    'Dans le cadre des missions qui sont à ma charge, je viens par la présente vous faire le point sur les présences du jour.',
-    `Vous trouverez-ci après la liste des retards, des absences et des visiteurs de la journée du ${fullDate}.`,
-  ]
-}
-
-function numberToFrench(n: number): string {
+function numberToFrench(value: number): string {
   const units = ['zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize']
-  if (n <= 16) return units[n]
-  if (n < 20) return `dix-${units[n - 10]}`
-  if (n < 70) {
+  if (value <= 16) return units[value]
+  if (value < 20) return `dix-${units[value - 10]}`
+  if (value < 70) {
     const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante']
-    const ten = Math.floor(n / 10)
-    const rest = n % 10
+    const ten = Math.floor(value / 10)
+    const rest = value % 10
     if (rest === 0) return tens[ten]
     if (rest === 1) return `${tens[ten]} et un`
     return `${tens[ten]}-${numberToFrench(rest)}`
   }
-  if (n < 80) return n === 71 ? 'soixante et onze' : `soixante-${numberToFrench(n - 60)}`
-  if (n < 100) return n === 80 ? 'quatre-vingts' : `quatre-vingt-${numberToFrench(n - 80)}`
-  if (n < 1000) {
-    const hundred = Math.floor(n / 100)
-    const rest = n % 100
+  if (value < 80) {
+    if (value === 71) return 'soixante et onze'
+    return `soixante-${numberToFrench(value - 60)}`
+  }
+  if (value < 100) {
+    if (value === 80) return 'quatre-vingts'
+    return `quatre-vingt-${numberToFrench(value - 80)}`
+  }
+  if (value < 1000) {
+    const hundred = Math.floor(value / 100)
+    const rest = value % 100
     const prefix = hundred === 1 ? 'cent' : `${units[hundred]} cent`
     if (rest === 0) return hundred > 1 ? `${prefix}s` : prefix
     return `${prefix} ${numberToFrench(rest)}`
   }
-  const thousand = Math.floor(n / 1000)
-  const rest = n % 1000
+  const thousand = Math.floor(value / 1000)
+  const rest = value % 1000
   const prefix = thousand === 1 ? 'mille' : `${numberToFrench(thousand)} mille`
   if (rest === 0) return prefix
   return `${prefix} ${numberToFrench(rest)}`
 }
 
-function buildVisitorsSentence(count: number) {
-  return `Les visiteurs enregistrés en ce jour sont au nombre de ${numberToFrench(Math.max(0, count))} (${count}) personnes.`
+function buildVisitorsSentence(count: number): string {
+  return `Les visiteurs enregistrés en ce jour sont au nombre de ${numberToFrench(Math.max(0, count))} (${String(count).padStart(2, '0')}) personnes.`
 }
 
-function formatArrival(time: string) {
+function formatArrival(time: string): string {
   const [hours, minutes] = time.split(':')
   return `${hours}h${minutes}`
 }
 
-function fitCellText(font: any, text: string, fontSize: number, maxWidth: number) {
-  const clean = text.trim()
-  if (font.widthOfTextAtSize(clean, fontSize) <= maxWidth) return clean
-  let value = clean
-  while (value.length > 1 && font.widthOfTextAtSize(`${value}...`, fontSize) > maxWidth) {
-    value = value.slice(0, -1)
+function buildIntroParagraphs(date: string): string[] {
+  const [year, month, day] = date.split('-').map(Number)
+  const value = new Date(year, month - 1, day)
+  const weekday = value.toLocaleDateString('fr-FR', { weekday: 'long' })
+  const fullDate = value.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+  return [
+    'Dans le cadre des missions qui sont à ma charge, je viens par la présente vous faire le point sur les présences du jour.',
+    `Vous trouverez-ci après la liste des retards, des absences et des visiteurs de la journée du ${weekday} ${fullDate}.`,
+  ]
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+}
+
+async function loadBackgroundAsset(): Promise<{ dataUrl: string; bytes: Uint8Array }> {
+  if (!backgroundAssetPromise) {
+    backgroundAssetPromise = fetch('/assets/crfc_template_background.jpg')
+      .then((response) => response.arrayBuffer())
+      .then((buffer) => {
+        const bytes = new Uint8Array(buffer)
+        let binary = ''
+        const chunkSize = 0x8000
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
+        }
+        return {
+          bytes,
+          dataUrl: `data:image/jpeg;base64,${btoa(binary)}`,
+        }
+      })
   }
-  return `${value}...`
+  return backgroundAssetPromise
 }
 
-function addReportPage(pdfDoc: PDFDocument, background: any) {
-  const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
-  page.drawImage(background, { x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT })
-  return page
-}
-
-function drawWrappedText(page: any, text: string, x: number, y: number, maxWidth: number, font: any, fontSize: number, lineHeight: number) {
-  const words = text.split(/\s+/)
-  let line = ''
-  let currentY = y
-  for (const word of words) {
-    const candidate = line ? `${line} ${word}` : word
-    if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
-      line = candidate
-      continue
-    }
-    page.drawText(line, { x, y: currentY, size: fontSize, font, color: rgb(0.1, 0.1, 0.1) })
-    line = word
-    currentY -= lineHeight
+function buildPdfMarkup(params: {
+  report: DailyReport
+  employees: Employee[]
+  absenceReasons: AbsenceReason[]
+  author: User
+  letterheadSrc: string
+  includeLetterhead?: boolean
+  transparentBackground?: boolean
+}): string {
+  const {
+    report,
+    employees,
+    absenceReasons,
+    author,
+    letterheadSrc,
+    includeLetterhead = true,
+    transparentBackground = false,
+  } = params
+  const getEmployeeName = (id: string, fallback?: string) => {
+    const employee = employees.find((item) => item.id === id)
+    return formatEmployeeNameForPdf(employee, fallback)
   }
-  if (line) page.drawText(line, { x, y: currentY, size: fontSize, font, color: rgb(0.1, 0.1, 0.1) })
-  return currentY - lineHeight
+  const getReasonLabel = (id: string) => absenceReasons.find((reason) => reason.id === id)?.label ?? ''
+
+  const lateRows = report.lateEntries.length > 0
+    ? report.lateEntries.map((entry, index) => `
+      <tr>
+        <td class="ci">${index + 1}</td>
+        <td class="cn">${escapeHtml(getEmployeeName(entry.employeeId, entry.employeeNameSnapshot))}</td>
+        <td class="cv">${escapeHtml(formatArrival(entry.arrivalTime))}</td>
+      </tr>`).join('')
+    : '<tr><td class="ci"></td><td class="cn"></td><td class="cv"></td></tr>'
+
+  const absenceRows = report.absenceEntries.length > 0
+    ? report.absenceEntries.map((entry, index) => `
+      <tr>
+        <td class="ci">${index + 1}</td>
+        <td class="cn">${escapeHtml(getEmployeeName(entry.employeeId, entry.employeeNameSnapshot))}</td>
+        <td class="cv">${escapeHtml(getReasonLabel(entry.reasonId))}</td>
+      </tr>`).join('')
+    : '<tr><td class="ci"></td><td class="cn"></td><td class="cv"></td></tr>'
+
+  const introParagraphs = buildIntroParagraphs(report.date)
+    .map((paragraph) => `<p class="para">${escapeHtml(paragraph)}</p>`)
+    .join('')
+
+  const authorName = escapeHtml(`${author.firstName} ${author.lastName}`.trim())
+
+  return `
+    <style>
+      .pdf-capture-root,
+      .pdf-capture-root * {
+        box-sizing: border-box;
+      }
+
+      .pdf-capture-root {
+        width: 210mm;
+        height: 297mm;
+        margin: 0;
+        padding: 0;
+        background: ${transparentBackground ? 'transparent' : '#ffffff'};
+        color: #101010;
+        font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        font-smooth: always;
+        position: relative;
+      }
+
+      .pdf-capture-root::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: ${includeLetterhead ? `url("${letterheadSrc}")` : 'none'};
+        background-repeat: no-repeat;
+        background-position: center top;
+        background-size: 100% 100%;
+        z-index: 0;
+      }
+
+      .pdf-page-shell {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
+        padding: 41.5mm 25mm 29mm;
+      }
+
+      .date-line {
+        text-align: right;
+        font-size: 11.04pt;
+        font-weight: 400;
+        line-height: 1.115;
+        margin: 0 0 19pt 0;
+      }
+
+      .addressee-row {
+        display: flex;
+        justify-content: flex-end;
+        margin: 0 0 16pt 0;
+      }
+
+      .addressee-box {
+        width: 78%;
+        text-align: center;
+      }
+
+      .addressee-box p {
+        margin: 0;
+        font-size: 11.04pt;
+        line-height: 1.1;
+        font-weight: 700;
+      }
+
+      .addressee-box p:first-child {
+        margin-bottom: 5pt;
+      }
+
+      .subject {
+        margin: 0 0 10pt 0;
+        font-size: 11.04pt;
+        line-height: 1.12;
+        font-weight: 400;
+      }
+
+      .subject span {
+        font-weight: 700;
+        text-decoration: underline;
+      }
+
+      .greeting {
+        margin: 0 0 7pt 18pt;
+        font-size: 11.04pt;
+        line-height: 1.115;
+        font-weight: 700;
+      }
+
+      .para,
+      .closing {
+        margin: 0 0 8.5pt 0;
+        font-size: 11.04pt;
+        line-height: 1.14;
+        text-align: justify;
+        text-indent: 18pt;
+      }
+
+      .section-title,
+      .visitors-title {
+        margin: 10pt 0 6pt 0;
+        font-size: 11.04pt;
+        line-height: 1.115;
+        font-weight: 700;
+        text-align: center;
+      }
+
+      .report-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        margin: 0 0 10pt 0;
+      }
+
+      .report-table,
+      .report-table th,
+      .report-table td {
+        border: 0.75pt solid #707070;
+      }
+
+      .report-table th {
+        background: #d9d9d9;
+        color: #111111;
+        font-size: 9pt;
+        line-height: 1;
+        font-weight: 700;
+        text-align: center;
+        padding: 2pt 4pt;
+      }
+
+      .report-table td {
+        color: #111111;
+        font-size: 9pt;
+        line-height: 1;
+        font-weight: 400;
+        padding: 1.8pt 4pt;
+        vertical-align: middle;
+      }
+
+      .ci {
+        width: 8%;
+        text-align: center;
+      }
+
+      .cn {
+        width: 67%;
+      }
+
+      .cv {
+        width: 25%;
+      }
+
+      .report-table td.cv,
+      .report-table th.cv {
+        text-align: center;
+      }
+
+      .visitors-title {
+        margin-top: 13pt;
+        margin-bottom: 4pt;
+      }
+
+      .closing {
+        margin-top: 8pt;
+        margin-bottom: 0;
+      }
+
+      .signature {
+        width: 47%;
+        margin: 30pt 0 0 auto;
+        font-size: 11.04pt;
+        line-height: 1.16;
+        font-weight: 700;
+        text-align: center;
+      }
+    </style>
+    <div class="pdf-capture-root">
+      <div class="pdf-page-shell">
+        <div class="date-line">${escapeHtml(buildCityLine(report.date))}</div>
+
+        <div class="addressee-row">
+          <div class="addressee-box">
+            <p>A</p>
+            <p>L’attention de Monsieur le Coordonnateur National</p>
+            <p>du Centre de Réseaux des Filières de Croissance (CRFC)</p>
+            <p>au Cameroun</p>
+          </div>
+        </div>
+
+        <div class="subject"><span>Objet</span> : Compte rendu de la journée</div>
+        <p class="greeting">Monsieur le Coordonnateur National,</p>
+        ${introParagraphs}
+
+        <div class="section-title">Retards</div>
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th class="ci">N°</th>
+              <th class="cn">NOMS ET PRÉNOMS</th>
+              <th class="cv">HEURE D’ARRIVÉE</th>
+            </tr>
+          </thead>
+          <tbody>${lateRows}</tbody>
+        </table>
+
+        <div class="section-title">Absents</div>
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th class="ci">N°</th>
+              <th class="cn">NOMS ET PRÉNOMS</th>
+              <th class="cv">MOTIF</th>
+            </tr>
+          </thead>
+          <tbody>${absenceRows}</tbody>
+        </table>
+
+        <div class="visitors-title">Visiteurs enregistrés</div>
+        <p class="para">${escapeHtml(buildVisitorsSentence(report.visitorCount))}</p>
+
+        <p class="closing">Dans l’attente de vos instructions, je vous prie d’agréer Monsieur le Coordonnateur National, l’expression de mon profond respect.</p>
+
+        <div class="signature">${authorName}</div>
+      </div>
+    </div>
+  `
 }
 
-function drawSectionTitle(page: any, title: string, y: number, boldFont: any) {
-  const titleWidth = boldFont.widthOfTextAtSize(title, 11)
-  page.drawText(title, { x: (PAGE_WIDTH - titleWidth) / 2, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
-}
+async function renderMarkupToCanvas(markup: string): Promise<HTMLCanvasElement> {
+  const mount = document.createElement('div')
+  mount.setAttribute('aria-hidden', 'true')
+  mount.style.position = 'fixed'
+  mount.style.left = '-100000px'
+  mount.style.top = '0'
+  mount.style.width = '210mm'
+  mount.style.height = '297mm'
+  mount.style.background = '#ffffff'
+  mount.style.zIndex = '-1'
+  mount.innerHTML = markup
+  document.body.appendChild(mount)
 
-function drawTableRow(page: any, row: string[], y: number, font: any, boldFont: any, isHeader = false) {
-  const rowHeight = 18
-  let x = LEFT_X
-  for (let index = 0; index < row.length; index += 1) {
-    const width = TABLE_WIDTHS[index]
-    const value = fitCellText(isHeader ? boldFont : font, row[index] ?? '', 9, width - 10)
-    page.drawRectangle({
-      x,
-      y: y - rowHeight + 3,
-      width,
-      height: rowHeight,
-      borderWidth: 1,
-      borderColor: rgb(0.12, 0.12, 0.12),
-      color: isHeader ? rgb(0.85, 0.85, 0.85) : undefined,
+  try {
+    const root = mount.querySelector('.pdf-capture-root') as HTMLElement | null
+    if (!root) throw new Error('Template PDF introuvable.')
+
+    await new Promise((resolve) => window.setTimeout(resolve, 120))
+
+    return await html2canvas(root, {
+      scale: 2.5,
+      useCORS: true,
+      backgroundColor: null,
+      logging: false,
+      width: root.scrollWidth,
+      height: root.scrollHeight,
+      windowWidth: root.scrollWidth,
+      windowHeight: root.scrollHeight,
     })
-    page.drawText(value, {
-      x: x + 5,
-      y: y - 11,
-      size: 9,
-      font: isHeader ? boldFont : font,
-      color: rgb(0.1, 0.1, 0.1),
-    })
-    x += width
+  } finally {
+    mount.remove()
   }
-  return y - rowHeight
+}
+
+export async function buildPdfPreviewMarkup(params: {
+  report: DailyReport
+  employees: Employee[]
+  absenceReasons: AbsenceReason[]
+  author: User
+}): Promise<string> {
+  const { dataUrl } = await loadBackgroundAsset()
+  return buildPdfMarkup({ ...params, letterheadSrc: dataUrl })
 }
 
 export async function generatePdfBytes(params: {
@@ -169,91 +452,33 @@ export async function generatePdfBytes(params: {
   employees: Employee[]
   absenceReasons: AbsenceReason[]
   author: User
-}) {
+}): Promise<Uint8Array> {
+  const backgroundAsset = await loadBackgroundAsset()
+  const markup = buildPdfMarkup({
+    ...params,
+    letterheadSrc: backgroundAsset.dataUrl,
+    includeLetterhead: false,
+    transparentBackground: true,
+  })
+  const canvas = await renderMarkupToCanvas(markup)
+  const imageBytes = await fetch(canvas.toDataURL('image/png')).then((response) => response.arrayBuffer())
+
   const pdfDoc = await PDFDocument.create()
-  const font = await pdfDoc.embedFont(StandardFonts.TimesRoman)
-  const boldFont = await pdfDoc.embedFont(StandardFonts.TimesRomanBold)
-  const background = await pdfDoc.embedJpg(await loadBackgroundBytes())
-  const { report, employees, absenceReasons, author } = params
-  const getEmployeeName = (id: string, fallback?: string) => formatEmployeeNameForPdf(employees.find((employee) => employee.id === id), fallback)
-  const getReasonLabel = (id: string) => absenceReasons.find((reason) => reason.id === id)?.label ?? 'Inconnu'
-
-  let page = addReportPage(pdfDoc, background)
-  let y = START_Y
-
-  const ensureSpace = (needed: number) => {
-    if (y - needed >= MIN_Y) return
-    page = addReportPage(pdfDoc, background)
-    y = START_Y
-  }
-
-  page.drawText(buildCityLine(report.date), { x: 360, y, size: 11, font, color: rgb(0.1, 0.1, 0.1) })
-  y -= 36
-  page.drawText('A', { x: 430, y, size: 11, font, color: rgb(0.1, 0.1, 0.1) })
-  y -= 16
-  page.drawText("L'attention de Monsieur le Coordonnateur National", { x: 315, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
-  y -= 16
-  page.drawText('du Centre de Réseaux des Filières de Croissance (CRFC) au Cameroun', { x: 250, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
-  y -= 28
-  page.drawText('Objet : Compte rendu de la journée', { x: 54, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
-  y -= 28
-  page.drawText('Monsieur le Coordonnateur National,', { x: 54, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
-  y -= 22
-
-  for (const paragraph of buildIntroParagraphs(report.date)) {
-    ensureSpace(44)
-    y = drawWrappedText(page, paragraph, TEXT_X, y, CONTENT_WIDTH, font, 11, 15)
-  }
-
-  const lateRows = report.lateEntries.length > 0
-    ? report.lateEntries.map((entry, index) => [
-      String(index + 1),
-      getEmployeeName(entry.employeeId, entry.employeeNameSnapshot),
-      formatArrival(entry.arrivalTime),
-    ])
-    : [['', '', '']]
-
-  const absenceRows = report.absenceEntries.length > 0
-    ? report.absenceEntries.map((entry, index) => [
-      String(index + 1),
-      getEmployeeName(entry.employeeId, entry.employeeNameSnapshot),
-      getReasonLabel(entry.reasonId),
-    ])
-    : [['', '', '']]
-
-  const drawTableSection = (title: string, headers: string[], rows: string[][]) => {
-    ensureSpace(58)
-    y -= 8
-    drawSectionTitle(page, title, y, boldFont)
-    y -= 12
-    y = drawTableRow(page, headers, y, font, boldFont, true)
-    for (const row of rows) {
-      ensureSpace(22)
-      if (y === START_Y) {
-        drawSectionTitle(page, `${title} (suite)`, y, boldFont)
-        y -= 12
-        y = drawTableRow(page, headers, y, font, boldFont, true)
-      }
-      y = drawTableRow(page, row, y, font, boldFont, false)
-    }
-  }
-
-  drawTableSection('Retards', ['N°', 'NOMS ET PRÉNOMS', "HEURE D’ARRIVÉE"], lateRows)
-  drawTableSection('Absents', ['N°', 'NOMS ET PRÉNOMS', 'MOTIF'], absenceRows)
-
-  ensureSpace(80)
-  y -= 14
-  page.drawText('Visiteurs enregistrés', { x: 238, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
-  y -= 18
-  y = drawWrappedText(page, buildVisitorsSentence(report.visitorCount), TEXT_X, y, CONTENT_WIDTH, font, 11, 15)
-  y -= 8
-  ensureSpace(60)
-  y = drawWrappedText(page, "Dans l'attente de vos instructions, je vous prie d'agréer Monsieur le Coordonnateur National, l'expression de mon profond respect.", TEXT_X, y, CONTENT_WIDTH, font, 11, 15)
-  y -= 12
-  ensureSpace(40)
-  page.drawText(`${author.firstName} ${author.lastName}`.trim(), { x: 392, y, size: 11, font: boldFont, color: rgb(0.1, 0.1, 0.1) })
-  y -= 14
-  page.drawText(author.jobTitle || 'Agent', { x: 392, y, size: 10, font, color: rgb(0.25, 0.25, 0.25) })
+  const background = await pdfDoc.embedJpg(backgroundAsset.bytes)
+  const image = await pdfDoc.embedPng(imageBytes)
+  const page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT])
+  page.drawImage(background, {
+    x: 0,
+    y: 0,
+    width: A4_WIDTH_PT,
+    height: A4_HEIGHT_PT,
+  })
+  page.drawImage(image, {
+    x: 0,
+    y: 0,
+    width: A4_WIDTH_PT,
+    height: A4_HEIGHT_PT,
+  })
 
   return pdfDoc.save()
 }

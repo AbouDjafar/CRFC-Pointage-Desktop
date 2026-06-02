@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { getAbsenceReasonLabel } from '@/lib/absenceReasons'
 import { formatFrDate } from '@/lib/date'
 import type { AbsenceReason, DailyReport, Employee, User } from '@/types'
 
@@ -13,7 +14,7 @@ export function generateExcelBytes(params: {
   const { reports, employees, absenceReasons, author, periodStart, periodEnd } = params
   const getEmployeeName = (id: string, fallback?: string) =>
     employees.find((employee) => employee.id === id)?.fullName ?? fallback ?? 'Inconnu'
-  const getReasonLabel = (id: string) => absenceReasons.find((reason) => reason.id === id)?.label ?? 'Inconnu'
+  const getReasonLabel = (id: string) => getAbsenceReasonLabel(absenceReasons, id)
   const sorted = [...reports].sort((a, b) => a.date.localeCompare(b.date))
   const totalLate = sorted.reduce((sum, report) => sum + report.lateEntries.length, 0)
   const totalAbsent = sorted.reduce((sum, report) => sum + report.absenceEntries.length, 0)

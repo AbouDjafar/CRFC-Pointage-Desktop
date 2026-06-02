@@ -2,6 +2,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCheck, Download, RotateCcw, Trash2 } from 'lucide-react'
 import { useAuth, userFullName } from '@/contexts/AuthContext'
 import { useData } from '@/contexts/DataContext'
+import { getAbsenceReasonLabel } from '@/lib/absenceReasons'
 import { formatDateTime, formatLongDate } from '@/lib/date'
 import { askConfirmation, showError, showSuccess } from '@/lib/runtime'
 
@@ -105,7 +106,7 @@ export function ReportDetailPage() {
         </div>
         <div className="card">
           <div className="card-header"><h2>Absences</h2></div>
-          <div className="list">{report.absenceEntries.map((entry) => <div key={entry.id} className="list-row"><strong>{employees.find((employee) => employee.id === entry.employeeId)?.fullName ?? entry.employeeNameSnapshot ?? 'Inconnu'}</strong><span>{absenceReasons.find((reason) => reason.id === entry.reasonId)?.label ?? 'Inconnu'}</span></div>)}</div>
+          <div className="list">{report.absenceEntries.map((entry) => <div key={entry.id} className="list-row"><strong>{employees.find((employee) => employee.id === entry.employeeId)?.fullName ?? entry.employeeNameSnapshot ?? 'Inconnu'}</strong><span>{getAbsenceReasonLabel(absenceReasons, entry.reasonId)}</span></div>)}</div>
         </div>
         <div className="card">
           <div className="card-header"><h2>Retards</h2></div>

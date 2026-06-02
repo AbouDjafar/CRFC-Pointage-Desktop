@@ -5,6 +5,7 @@ import { CenterModal } from '@/components/CenterModal'
 import { FormSelect } from '@/components/FormSelect'
 import { useAuth } from '@/contexts/AuthContext'
 import { useData } from '@/contexts/DataContext'
+import { EMPTY_ABSENCE_REASON_LABEL, getAbsenceReasonLabel } from '@/lib/absenceReasons'
 import { formatLongDate, today } from '@/lib/date'
 import { employeeMatchesQuery } from '@/lib/reporting'
 import { showError, showSuccess } from '@/lib/runtime'
@@ -116,7 +117,7 @@ export function ReportPage() {
     if (!report || !selectedEmployeeId) return
     if (modalType === 'late') {
       await addLateEntry(report.id, { employeeId: selectedEmployeeId, arrivalTime })
-    } else if (modalType === 'absent' && selectedReasonId) {
+    } else if (modalType === 'absent') {
       await addAbsenceEntry(report.id, { employeeId: selectedEmployeeId, reasonId: selectedReasonId, comment: absenceComment || undefined })
     }
     closeModal()
@@ -126,7 +127,10 @@ export function ReportPage() {
     value: employee.id,
     label: employee.fullName,
   }))
-  const reasonOptions = absenceReasons.map((reason) => ({ value: reason.id, label: reason.label }))
+  const reasonOptions = [
+    ...(user?.role === 'ADMIN' ? [{ value: '', label: EMPTY_ABSENCE_REASON_LABEL }] : []),
+    ...absenceReasons.map((reason) => ({ value: reason.id, label: reason.label })),
+  ]
 
   if (!report) {
     return (
@@ -258,7 +262,7 @@ export function ReportPage() {
               <div key={entry.id} className="list-row">
                 <div>
                   <strong>{employees.find((employee) => employee.id === entry.employeeId)?.fullName ?? entry.employeeNameSnapshot ?? 'Inconnu'}</strong>
-                  <div className="muted">{absenceReasons.find((reason) => reason.id === entry.reasonId)?.label ?? 'Inconnu'}</div>
+                  <div className="muted">{getAbsenceReasonLabel(absenceReasons, entry.reasonId)}</div>
                   {entry.comment ? <div className="muted italic">{entry.comment}</div> : null}
                 </div>
                 {!isFinalized ? (

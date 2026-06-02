@@ -1,4 +1,5 @@
 import { DEFAULT_APP_SETTINGS } from '@/constants/appSettings'
+import { getAbsenceReasonLabel } from '@/lib/absenceReasons'
 import type { AbsenceReason, DailyReport, Employee, LateEntry } from '@/types'
 
 function parseTimeMinutes(value: string) {
@@ -43,7 +44,6 @@ export function computeGlobalStats(reports: DailyReport[], employees: Employee[]
     0,
   )
   const employeeNames = new Map(employees.map((employee) => [employee.id, employee.fullName]))
-  const reasonNames = new Map(reasons.map((reason) => [reason.id, reason.label]))
   const lateByEmployee = new Map<string, number>()
   const absentByEmployee = new Map<string, number>()
   const absentByReason = new Map<string, number>()
@@ -71,7 +71,7 @@ export function computeGlobalStats(reports: DailyReport[], employees: Employee[]
   const topReasons = [...absentByReason.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
-    .map(([id, count]) => ({ id, name: reasonNames.get(id) ?? id, count }))
+    .map(([id, count]) => ({ id, name: getAbsenceReasonLabel(reasons, id), count }))
 
   return { totalLate, totalAbsent, totalVisitors, totalLateMin, topLate, topAbsent, topReasons }
 }
