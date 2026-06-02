@@ -23,7 +23,7 @@ import {
 } from 'recharts'
 import { PERIOD_LABELS, PERIOD_OPTIONS, type PeriodMode, getPeriodThreshold } from '@/constants/periods'
 import { useData } from '@/contexts/DataContext'
-import { getAbsenceReasonLabel } from '@/lib/absenceReasons'
+import { getAbsenceReasonStatsLabel, isUnjustifiedAbsenceReason } from '@/lib/absenceReasons'
 import { enumerateDates, formatLongDate, formatShortDate, today } from '@/lib/date'
 
 const REASON_PALETTE = ['#2563EB', '#F97316', '#22C55E', '#8B5CF6', '#E11D48', '#14B8A6', '#D97706', '#0F766E']
@@ -92,11 +92,6 @@ export function EmployeeDetailPage() {
     () => Object.fromEntries(absenceReasons.map((reason, index) => [reason.id, REASON_PALETTE[index % REASON_PALETTE.length]])) as Record<string, string>,
     [absenceReasons],
   )
-  const unjustifiedReasonIds = useMemo(
-    () => new Set(absenceReasons.filter((reason) => reason.label.toLowerCase().includes('injust')).map((reason) => reason.id)),
-    [absenceReasons],
-  )
-
   const reporting = useMemo(() => {
     if (!employee) return null
 
@@ -146,14 +141,15 @@ export function EmployeeDetailPage() {
       for (const entry of absenceEntries) {
         totalAbsent += 1
         current.absenceCount += 1
-        if (unjustifiedReasonIds.has(entry.reasonId)) current.unjustifiedAbsenceCount += 1
-        reasonCounts[entry.reasonId] = (reasonCounts[entry.reasonId] ?? 0) + 1
+        if (isUnjustifiedAbsenceReason(absenceReasons, entry.reasonId)) current.unjustifiedAbsenceCount += 1
+        const statsLabel = getAbsenceReasonStatsLabel(absenceReasons, entry.reasonId)
+        reasonCounts[statsLabel] = (reasonCounts[statsLabel] ?? 0) + 1
         incidents.push({
           key: entry.id,
           date: report.date,
           type: 'absence',
           title: 'Absence',
-          detail: getAbsenceReasonLabel(absenceReasons, entry.reasonId),
+          detail: getAbsenceReasonStatsLabel(absenceReasons, entry.reasonId),
           note: entry.comment,
           color: reasonColors[entry.reasonId] ?? '#ef4444',
         })
@@ -199,12 +195,12 @@ export function EmployeeDetailPage() {
 
     const topReasons = Object.entries(reasonCounts)
       .sort((a, b) => b[1] - a[1])
-      .map(([reasonId, count]) => {
+      .map(([reasonLabel, count]) => {
         return {
-          id: reasonId,
-          label: getAbsenceReasonLabel(absenceReasons, reasonId),
+          id: reasonLabel,
+          label: reasonLabel,
           value: count,
-          fill: reasonColors[reasonId] ?? '#ef4444',
+          fill: reasonColors[reasonLabel] ?? '#ef4444',
         }
       })
 
@@ -273,7 +269,7 @@ export function EmployeeDetailPage() {
       cleanDays,
       longestCleanStreak,
     }
-  }, [absenceReasons, allReports, employee, reasonColors, threshold, unjustifiedReasonIds])
+  }, [absenceReasons, allReports, employee, reasonColors, threshold])
 
   if (!employee || !reporting) {
     return (

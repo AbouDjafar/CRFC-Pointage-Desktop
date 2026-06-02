@@ -458,6 +458,23 @@ h4 {
   flex-shrink: 0;
 }
 
+.report-header-actions {
+  align-items: flex-end;
+}
+
+.header-date-stack {
+  display: grid;
+  gap: 6px;
+  align-self: stretch;
+}
+
+.header-date-label {
+  font-size: 0.83rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.76);
+  padding-left: 2px;
+}
+
 .card,
 .auth-card,
 .success-card {
@@ -953,8 +970,8 @@ h4 {
   min-width: 190px;
 }
 
-.report-date-picker span {
-  color: rgba(255, 255, 255, 0.76);
+.report-date-picker {
+  display: block;
 }
 
 .modal-backdrop {

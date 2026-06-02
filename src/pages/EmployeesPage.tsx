@@ -30,6 +30,7 @@ export function EmployeesPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [sex, setSex] = useState('')
   const [reasonId, setReasonId] = useState(absenceReasons[0]?.id ?? '')
   const [comment, setComment] = useState('')
 
@@ -45,6 +46,7 @@ export function EmployeesPage() {
     setSelectedEmployee(null)
     setFirstName('')
     setLastName('')
+    setSex('')
     setModalType('add')
   }
 
@@ -52,6 +54,7 @@ export function EmployeesPage() {
     setSelectedEmployee(employee)
     setFirstName(employee.firstName)
     setLastName(employee.lastName)
+    setSex(employee.sex ?? '')
     setModalType('edit')
   }
 
@@ -69,16 +72,21 @@ export function EmployeesPage() {
 
   async function submitModal() {
     if (modalType === 'add') {
-      await addEmployee(`${lastName} ${firstName}`.trim(), firstName, lastName)
+      await addEmployee(`${lastName} ${firstName}`.trim(), firstName, lastName, sex)
     }
     if (modalType === 'edit' && selectedEmployee) {
-      await updateEmployee(selectedEmployee.id, { firstName, lastName, fullName: `${lastName} ${firstName}`.trim() })
+      await updateEmployee(selectedEmployee.id, { firstName, lastName, sex: sex.trim() || undefined, fullName: `${lastName} ${firstName}`.trim() })
     }
     if (modalType === 'recurring' && selectedEmployee) {
       await setRecurringAbsence(selectedEmployee.id, reasonId, comment || undefined)
     }
     closeModal()
   }
+
+  const sexOptions = [
+    { value: 'Masculin', label: 'Masculin' },
+    { value: 'Feminin', label: 'Feminin' },
+  ]
 
   return (
     <section className="page">
@@ -164,6 +172,10 @@ export function EmployeesPage() {
                   <input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Nom" />
                 </label>
               </div>
+              <label className="field">
+                <span>Sexe (optionnel)</span>
+                <FormSelect value={sex} options={sexOptions} onChange={setSex} placeholder="Selectionner un sexe" isClearable />
+              </label>
               <div className="modal-actions">
                 {modalType === 'edit' && selectedEmployee ? (
                   <button className="danger-link button-leading-icon" onClick={async () => {

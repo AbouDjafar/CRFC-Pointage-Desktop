@@ -19,6 +19,7 @@ export interface Employee {
   fullName: string
   firstName: string
   lastName: string
+  sex?: string
   isActive: boolean
   needsReview: boolean
   importSource: string

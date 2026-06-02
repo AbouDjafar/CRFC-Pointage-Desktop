@@ -174,7 +174,7 @@ function buildPdfMarkup(params: {
     .map((paragraph) => `<p class="para">${escapeHtml(paragraph)}</p>`)
     .join('')
 
-  const authorName = escapeHtml(`${author.firstName} ${author.lastName}`.trim())
+  const authorName = escapeHtml(`${author.lastName} ${author.firstName}`.trim())
 
   return `
     <style>

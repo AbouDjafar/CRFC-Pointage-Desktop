@@ -23,10 +23,30 @@ export function applyImportedEmployees(current: Employee[], parsedRows: Imported
     const key = buildEmployeeKey(row.firstName, row.lastName)
     const existingIndex = existingIndexByKey.get(key)
     if (existingIndex !== undefined) {
-      nextEmployees[existingIndex] = { ...nextEmployees[existingIndex], firstName: row.firstName, lastName: row.lastName, fullName: row.fullName, isActive: true, importSource: 'IMPORT', importedAt }
+      nextEmployees[existingIndex] = {
+        ...nextEmployees[existingIndex],
+        firstName: row.firstName,
+        lastName: row.lastName,
+        fullName: row.fullName,
+        sex: row.sex ?? nextEmployees[existingIndex].sex,
+        isActive: true,
+        importSource: 'IMPORT',
+        importedAt,
+      }
       updated += 1
     } else {
-      nextEmployees.push({ id: genId(), firstName: row.firstName, lastName: row.lastName, fullName: buildFullName(row.firstName, row.lastName), isActive: true, needsReview: false, importSource: 'IMPORT', importedAt, createdAt: now })
+      nextEmployees.push({
+        id: genId(),
+        firstName: row.firstName,
+        lastName: row.lastName,
+        fullName: buildFullName(row.firstName, row.lastName),
+        sex: row.sex,
+        isActive: true,
+        needsReview: false,
+        importSource: 'IMPORT',
+        importedAt,
+        createdAt: now,
+      })
       existingIndexByKey.set(key, nextEmployees.length - 1)
       created += 1
     }

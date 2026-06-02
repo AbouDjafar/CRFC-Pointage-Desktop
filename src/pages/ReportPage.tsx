@@ -136,19 +136,21 @@ export function ReportPage() {
     return (
       <section className="page">
         <header className="page-header hero-header">
-          <div>
-            <p className="eyebrow">{isTodayReport ? 'Rapport du jour' : 'Rapport editable'}</p>
-            <h1>{formatLongDate(activeDate)}</h1>
-            <p>{isTodayReport ? "Aucun rapport n'existe encore pour aujourd'hui." : 'Aucun rapport n existe encore pour cette date.'}</p>
-          </div>
-          <div className="header-actions">
-            <label className="field report-date-picker">
-              <span>Date du rapport</span>
-              <div className="date-input-shell">
-                <CalendarDays size={16} />
-                <input type="date" value={selectedDate} onChange={(event) => handleDateSelection(event.target.value)} />
-              </div>
-            </label>
+        <div>
+          <p className="eyebrow">{isTodayReport ? 'Rapport du jour' : 'Rapport editable'}</p>
+          <h1>{formatLongDate(activeDate)}</h1>
+          <p>{isTodayReport ? "Aucun rapport n'existe encore pour aujourd'hui." : 'Aucun rapport n existe encore pour cette date.'}</p>
+        </div>
+          <div className="header-actions report-header-actions">
+            <div className="header-date-stack">
+              <span className="header-date-label">Date du rapport</span>
+              <label className="report-date-picker">
+                <div className="date-input-shell">
+                  <CalendarDays size={16} />
+                  <input type="date" value={selectedDate} onChange={(event) => handleDateSelection(event.target.value)} />
+                </div>
+              </label>
+            </div>
             {!isTodayReport ? (
               <Link className="ghost-button link-button" to="/historique">
                 Retour a l historique
@@ -172,14 +174,16 @@ export function ReportPage() {
           <h1>{formatLongDate(activeDate)}</h1>
           <p>{isFinalized ? 'Rapport finalise' : 'Rapport en brouillon'}{isTodayReport ? '' : ' - modification historique autorisee'}</p>
         </div>
-        <div className="header-actions">
-          <label className="field report-date-picker">
-            <span>Date du rapport</span>
-            <div className="date-input-shell">
-              <CalendarDays size={16} />
-              <input type="date" value={selectedDate} onChange={(event) => handleDateSelection(event.target.value)} />
-            </div>
-          </label>
+        <div className="header-actions report-header-actions">
+          <div className="header-date-stack">
+            <span className="header-date-label">Date du rapport</span>
+            <label className="report-date-picker">
+              <div className="date-input-shell">
+                <CalendarDays size={16} />
+                <input type="date" value={selectedDate} onChange={(event) => handleDateSelection(event.target.value)} />
+              </div>
+            </label>
+          </div>
           {!isTodayReport ? (
             <Link className="ghost-button link-button" to="/historique">
               Retour a l historique

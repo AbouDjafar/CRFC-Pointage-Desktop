@@ -6,6 +6,7 @@ import { SEED_EMPLOYEES, SEED_REASONS } from '@/data/seeds'
 import { useAuth } from '@/contexts/AuthContext'
 import { parseEmployeesSpreadsheet, parseReportsWorkbook } from '@/lib/importData'
 import { genId } from '@/lib/id'
+import { hydrateEmployeeSex } from '@/lib/employeeSex'
 import { buildPdfFileName } from '@/lib/exportNames'
 import { generatePdfBytes } from '@/lib/pdf'
 import { calcMinutesLate, recalculateReportsLateMinutes } from '@/lib/reporting'
@@ -34,7 +35,7 @@ interface DataContextValue {
   loading: boolean
   importReportsFromWorkbook(file: PickedImportFile): Promise<{ importedDates: number; replacedDates: number; lateEntries: number; absenceEntries: number }>
   importEmployeesFromSpreadsheet(file: PickedImportFile): Promise<{ created: number; updated: number; skipped: number }>
-  addEmployee(fullName: string, firstName: string, lastName: string): Promise<void>
+  addEmployee(fullName: string, firstName: string, lastName: string, sex?: string): Promise<void>
   updateEmployee(id: string, updates: Partial<Employee>): Promise<void>
   deleteEmployee(id: string): Promise<void>
   toggleEmployeeActive(id: string): Promise<void>
@@ -76,14 +77,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         desktopBridge.getRecurringAbsences(),
         desktopBridge.getAppSettings(),
       ])
-      const nextEmployees = storedEmployees.length > 0 ? storedEmployees : SEED_EMPLOYEES
+      const nextEmployees = (storedEmployees.length > 0 ? storedEmployees : SEED_EMPLOYEES).map(hydrateEmployeeSex)
       const nextReasons = storedReasons.length > 0 ? storedReasons : SEED_REASONS
       setEmployees(nextEmployees)
       setAbsenceReasons(nextReasons)
       setRawReports(storedReports)
       setRecurringAbsences(storedRecurring)
       setAppSettings(storedSettings)
-      if (storedEmployees.length === 0) await desktopBridge.saveEmployees(nextEmployees)
+      if (storedEmployees.length === 0 || storedEmployees.some((employee) => !employee.sex?.trim())) {
+        await desktopBridge.saveEmployees(nextEmployees)
+      }
       if (storedReasons.length === 0) await desktopBridge.saveAbsenceReasons(nextReasons)
       setLoading(false)
     }
@@ -154,8 +157,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return { importedDates: result.importedDates, replacedDates: result.replacedDates, lateEntries: result.lateEntries, absenceEntries: result.absenceEntries }
   }, [absenceReasons, deleteStoredPdf, employees, rawReports, saveReports, stripPdfMetadata, user])
 
-  const addEmployee = useCallback(async (fullName: string, firstName: string, lastName: string) => {
-    await saveEmployees([...employees, { id: genId(), fullName: fullName.trim(), firstName: firstName.trim(), lastName: lastName.trim(), isActive: true, needsReview: false, importSource: 'manual', importedAt: new Date().toISOString().split('T')[0], createdAt: new Date().toISOString() }])
+  const addEmployee = useCallback(async (fullName: string, firstName: string, lastName: string, sex?: string) => {
+    await saveEmployees([...employees, { id: genId(), fullName: fullName.trim(), firstName: firstName.trim(), lastName: lastName.trim(), sex: sex?.trim() || undefined, isActive: true, needsReview: false, importSource: 'manual', importedAt: new Date().toISOString().split('T')[0], createdAt: new Date().toISOString() }])
   }, [employees, saveEmployees])
 
   const updateEmployee = useCallback(async (id: string, updates: Partial<Employee>) => {

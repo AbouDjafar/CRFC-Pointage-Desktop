@@ -34,6 +34,7 @@ struct Employee {
     full_name: String,
     first_name: String,
     last_name: String,
+    sex: Option<String>,
     is_active: bool,
     needs_review: bool,
     import_source: String,
@@ -150,6 +151,7 @@ fn init_schema(connection: &Connection) -> Result<(), String> {
               full_name TEXT NOT NULL,
               first_name TEXT NOT NULL,
               last_name TEXT NOT NULL,
+              sex TEXT,
               is_active INTEGER NOT NULL,
               needs_review INTEGER NOT NULL,
               import_source TEXT NOT NULL,
@@ -203,11 +205,25 @@ fn init_schema(connection: &Connection) -> Result<(), String> {
     ensure_report_column(connection, "pdf_uri", "TEXT")?;
     ensure_report_column(connection, "pdf_file_name", "TEXT")?;
     ensure_report_column(connection, "pdf_generated_at", "TEXT")?;
+    ensure_employee_column(connection, "sex", "TEXT")?;
     Ok(())
 }
 
 fn ensure_report_column(connection: &Connection, column: &str, definition: &str) -> Result<(), String> {
     let sql = format!("ALTER TABLE reports ADD COLUMN {column} {definition}");
+    match connection.execute(&sql, []) {
+        Ok(_) => Ok(()),
+        Err(rusqlite::Error::SqliteFailure(error, _))
+            if error.extended_code == rusqlite::ffi::SQLITE_ERROR =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+fn ensure_employee_column(connection: &Connection, column: &str, definition: &str) -> Result<(), String> {
+    let sql = format!("ALTER TABLE employees ADD COLUMN {column} {definition}");
     match connection.execute(&sql, []) {
         Ok(_) => Ok(()),
         Err(rusqlite::Error::SqliteFailure(error, _))
@@ -338,7 +354,7 @@ fn save_users(app: tauri::AppHandle, users: Vec<User>) -> Result<(), String> {
 fn get_employees(app: tauri::AppHandle) -> Result<Vec<Employee>, String> {
     let connection = connect(&app)?;
     let mut statement = connection
-        .prepare("SELECT id, full_name, first_name, last_name, is_active, needs_review, import_source, imported_at, created_at FROM employees ORDER BY full_name ASC")
+        .prepare("SELECT id, full_name, first_name, last_name, sex, is_active, needs_review, import_source, imported_at, created_at FROM employees ORDER BY full_name ASC")
         .map_err(|error| error.to_string())?;
     let rows = statement
         .query_map([], |row| {
@@ -347,11 +363,12 @@ fn get_employees(app: tauri::AppHandle) -> Result<Vec<Employee>, String> {
                 full_name: row.get(1)?,
                 first_name: row.get(2)?,
                 last_name: row.get(3)?,
-                is_active: row.get::<_, i64>(4)? == 1,
-                needs_review: row.get::<_, i64>(5)? == 1,
-                import_source: row.get(6)?,
-                imported_at: row.get(7)?,
-                created_at: row.get(8)?,
+                sex: row.get(4)?,
+                is_active: row.get::<_, i64>(5)? == 1,
+                needs_review: row.get::<_, i64>(6)? == 1,
+                import_source: row.get(7)?,
+                imported_at: row.get(8)?,
+                created_at: row.get(9)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -365,8 +382,8 @@ fn save_employees(app: tauri::AppHandle, employees: Vec<Employee>) -> Result<(),
     transaction.execute("DELETE FROM employees", []).map_err(|error| error.to_string())?;
     for employee in employees {
         transaction.execute(
-            "INSERT INTO employees (id, full_name, first_name, last_name, is_active, needs_review, import_source, imported_at, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![employee.id, employee.full_name, employee.first_name, employee.last_name, if employee.is_active { 1 } else { 0 }, if employee.needs_review { 1 } else { 0 }, employee.import_source, employee.imported_at, employee.created_at],
+            "INSERT INTO employees (id, full_name, first_name, last_name, sex, is_active, needs_review, import_source, imported_at, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![employee.id, employee.full_name, employee.first_name, employee.last_name, employee.sex, if employee.is_active { 1 } else { 0 }, if employee.needs_review { 1 } else { 0 }, employee.import_source, employee.imported_at, employee.created_at],
         ).map_err(|error| error.to_string())?;
     }
     transaction.commit().map_err(|error| error.to_string())

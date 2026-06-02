@@ -1,4 +1,5 @@
 import type { AbsenceReason, Employee, User } from '@/types'
+import { getKnownEmployeeSex } from '@/lib/employeeSex'
 
 export const SEED_ADMIN: User = {
   id: 'crfc-admin-001',
@@ -63,6 +64,7 @@ export const SEED_EMPLOYEES: Employee[] = seedDefinitions.map(([id, seed]) => ({
   fullName: seed.fn ? `${seed.ln} ${seed.fn}` : seed.ln,
   firstName: seed.fn,
   lastName: seed.ln,
+  sex: getKnownEmployeeSex({ firstName: seed.fn, lastName: seed.ln }),
   isActive: true,
   needsReview: false,
   importSource: 'CSV',

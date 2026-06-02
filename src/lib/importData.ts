@@ -5,6 +5,7 @@ export interface ImportedEmployeeRow {
   firstName: string
   lastName: string
   fullName: string
+  sex?: string
 }
 
 export interface ImportedLateRow {
@@ -96,13 +97,15 @@ function findEmployeeHeaderRow(matrix: string[][]) {
   const lastNameAliases = ['nom', 'noms']
   const firstNameAliases = ['prenom', 'prenoms']
   const combinedNameAliases = ['nometprenom', 'nomsetprenom', 'nomsetprenoms', 'nomsprenoms', 'nomcomplet', 'fullname']
+  const sexAliases = ['sexe', 'genre']
   for (let rowIndex = 0; rowIndex < matrix.length; rowIndex += 1) {
     const normalizedRow = matrix[rowIndex].map((cell) => normalizeHeader(cell))
     const lastNameIndex = normalizedRow.findIndex((cell) => lastNameAliases.includes(cell))
     const firstNameIndex = normalizedRow.findIndex((cell) => firstNameAliases.includes(cell))
     const combinedNameIndex = normalizedRow.findIndex((cell) => combinedNameAliases.includes(cell))
+    const sexIndex = normalizedRow.findIndex((cell) => sexAliases.includes(cell))
     if (lastNameIndex >= 0 || combinedNameIndex >= 0) {
-      return { headerIndex: rowIndex, lastNameIndex, firstNameIndex, combinedNameIndex }
+      return { headerIndex: rowIndex, lastNameIndex, firstNameIndex, combinedNameIndex, sexIndex }
     }
   }
   throw new Error('Colonnes introuvables pour les employes.')
@@ -154,12 +157,20 @@ function parseMinutesLate(value: unknown, arrivalTime: string) {
   return Math.max(0, hours * 60 + minutes - (8 * 60 + 15))
 }
 
+function normalizeSex(value: string) {
+  const normalized = normalizeForLookup(value)
+  if (!normalized) return undefined
+  if (normalized.startsWith('m')) return 'Masculin'
+  if (normalized.startsWith('f')) return 'Feminin'
+  return value.trim() || undefined
+}
+
 export async function parseEmployeesSpreadsheet(file: PickedImportFile) {
   const workbook = readWorkbook(file)
   const firstSheetName = workbook.SheetNames[0]
   if (!firstSheetName) throw new Error('Le fichier employe est vide.')
   const matrix = sheetToMatrix(workbook.Sheets[firstSheetName])
-  const { headerIndex, lastNameIndex, firstNameIndex, combinedNameIndex } = findEmployeeHeaderRow(matrix)
+  const { headerIndex, lastNameIndex, firstNameIndex, combinedNameIndex, sexIndex } = findEmployeeHeaderRow(matrix)
   const seen = new Set<string>()
   const rows: ImportedEmployeeRow[] = []
   let skipped = 0
@@ -171,6 +182,7 @@ export async function parseEmployeesSpreadsheet(file: PickedImportFile) {
     const useCombinedName = !rawFirstName && !!combinedName
     const lastName = useCombinedName ? combinedName : rawLastName
     const firstName = useCombinedName ? '' : rawFirstName
+    const sex = sexIndex >= 0 ? normalizeSex(normalizeCell(row[sexIndex])) : undefined
     if (!lastName && !firstName) continue
     if (!lastName) {
       skipped += 1
@@ -182,7 +194,7 @@ export async function parseEmployeesSpreadsheet(file: PickedImportFile) {
       continue
     }
     seen.add(key)
-    rows.push({ firstName, lastName, fullName: buildFullName(firstName, lastName) })
+    rows.push({ firstName, lastName, fullName: buildFullName(firstName, lastName), sex })
   }
 
   if (rows.length === 0) throw new Error('Aucune ligne employe exploitable trouvee.')
