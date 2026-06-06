@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
-import { Activity, ArrowLeft, CalendarClock, Clock3, ShieldAlert, UserCheck, UserX } from 'lucide-react'
+import { Activity, ArrowLeft, CalendarClock, Clock3, UserCheck, UserX } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
   Area,
@@ -68,6 +68,48 @@ function ChartTooltip({ active, payload, label }: any) {
   )
 }
 
+function normalizeReasonLabel(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function buildReasonColorMap(labels: string[]) {
+  const fixedColors: Record<string, string> = {
+    'absence injustifiee': '#dc2626',
+    maladie: '#f97316',
+    conge: '#2563eb',
+    mission: '#0f766e',
+    permission: '#d97706',
+    formation: '#7c3aed',
+    deplacement: '#0891b2',
+    autre: '#64748b',
+    '-vide-': '#dc2626',
+  }
+
+  const dynamic = new Map<string, string>()
+  let paletteIndex = 0
+
+  for (const label of labels) {
+    const normalized = normalizeReasonLabel(label)
+    if (fixedColors[normalized]) {
+      dynamic.set(label, fixedColors[normalized])
+      continue
+    }
+
+    while (Object.values(fixedColors).includes(REASON_PALETTE[paletteIndex % REASON_PALETTE.length])) {
+      paletteIndex += 1
+    }
+
+    dynamic.set(label, REASON_PALETTE[paletteIndex % REASON_PALETTE.length])
+    paletteIndex += 1
+  }
+
+  return dynamic
+}
+
 function PieTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null
   return (
@@ -88,10 +130,6 @@ export function EmployeeDetailPage() {
   const employee = employees.find((item) => item.id === id)
   const threshold = useMemo(() => getPeriodThreshold(period), [period])
 
-  const reasonColors = useMemo(
-    () => Object.fromEntries(absenceReasons.map((reason, index) => [reason.id, REASON_PALETTE[index % REASON_PALETTE.length]])) as Record<string, string>,
-    [absenceReasons],
-  )
   const reporting = useMemo(() => {
     if (!employee) return null
 
@@ -149,9 +187,9 @@ export function EmployeeDetailPage() {
           date: report.date,
           type: 'absence',
           title: 'Absence',
-          detail: getAbsenceReasonStatsLabel(absenceReasons, entry.reasonId),
+          detail: statsLabel,
           note: entry.comment,
-          color: reasonColors[entry.reasonId] ?? '#ef4444',
+          color: '#ef4444',
         })
       }
 
@@ -193,6 +231,8 @@ export function EmployeeDetailPage() {
 
     const activeDays = reportDayTrend.filter((item) => item.incidents > 0)
 
+    const reasonColorMap = buildReasonColorMap(Object.keys(reasonCounts))
+
     const topReasons = Object.entries(reasonCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([reasonLabel, count]) => {
@@ -200,22 +240,29 @@ export function EmployeeDetailPage() {
           id: reasonLabel,
           label: reasonLabel,
           value: count,
-          fill: reasonColors[reasonLabel] ?? '#ef4444',
+          fill: reasonColorMap.get(reasonLabel) ?? '#ef4444',
         }
       })
+
+    const coloredIncidents = incidents.map((incident) => (
+      incident.type === 'absence'
+        ? { ...incident, color: reasonColorMap.get(incident.detail) ?? '#ef4444' }
+        : incident
+    ))
 
     incidents.sort((a, b) => {
       if (a.date !== b.date) return b.date.localeCompare(a.date)
       return a.type.localeCompare(b.type)
     })
 
+    const hasNoIncidents = totalLate === 0 && totalAbsent === 0
     const reportDays = Math.max(reportDayTrend.length, 1)
     const lateDays = reportDayTrend.filter((item) => item.retards > 0).length
-    const punctualDays = reportDayTrend.filter((item) => item.retards === 0 && item.unjustifiedAbsences === 0).length
+    const punctualDays = hasNoIncidents ? reportDays : reportDayTrend.filter((item) => item.retards === 0 && item.unjustifiedAbsences === 0).length
     const unjustifiedAbsenceDays = reportDayTrend.filter((item) => item.unjustifiedAbsences > 0).length
     const totalAbsenceDays = reportDayTrend.filter((item) => item.absences > 0).length
-    const presenceDays = Math.max(reportDays - totalAbsenceDays, 0)
-    const cleanDays = reportDayTrend.filter((item) => item.clean).length
+    const presenceDays = hasNoIncidents ? reportDays : Math.max(reportDays - totalAbsenceDays, 0)
+    const cleanDays = hasNoIncidents ? reportDays : reportDayTrend.filter((item) => item.clean).length
     const averageLateMinutes = totalLate > 0 ? totalLateMin / totalLate : 0
 
     let longestCleanStreak = 0
@@ -229,16 +276,20 @@ export function EmployeeDetailPage() {
       }
     }
 
-    const streakBase = Math.max(Math.min(reportDayTrend.length, 10), 1)
-    const punctualityScore = Math.round(100 * (punctualDays / reportDays))
-    const presenceScore = Math.round(Math.max(0, 100 * (1 - unjustifiedAbsenceDays / reportDays)))
-    const assiduityScore = Math.round(100 * (cleanDays / reportDays))
-    const rigorScore = Math.round(Math.min(100, (longestCleanStreak / streakBase) * 100))
-    const presenceRate = presenceDays / reportDays
-    const lateRateWhenPresent = presenceDays > 0 ? lateDays / presenceDays : 1
-    const minuteSeverityFactor = Math.max(0, 1 - Math.min(averageLateMinutes, 60) / 60)
-    const disciplineScore = Math.round(Math.max(0, 100 * presenceRate * (((1 - lateRateWhenPresent) * 0.65) + (minuteSeverityFactor * 0.35))))
-    const availabilityScore = Math.round(Math.max(0, 100 * (1 - totalAbsenceDays / reportDays)))
+    if (hasNoIncidents) {
+      longestCleanStreak = Math.max(reportDayTrend.length, 1)
+    }
+
+    const streakBase = Math.max(Math.min(reportDayTrend.length || 1, 10), 1)
+    const punctualityScore = hasNoIncidents ? 100 : Math.round(100 * (punctualDays / reportDays))
+    const presenceScore = hasNoIncidents ? 100 : Math.round(Math.max(0, 100 * (1 - unjustifiedAbsenceDays / reportDays)))
+    const assiduityScore = hasNoIncidents ? 100 : Math.round(100 * (cleanDays / reportDays))
+    const rigorScore = hasNoIncidents ? 100 : Math.round(Math.min(100, (longestCleanStreak / streakBase) * 100))
+    const presenceRate = hasNoIncidents ? 1 : presenceDays / reportDays
+    const lateRateWhenPresent = hasNoIncidents ? 0 : presenceDays > 0 ? lateDays / presenceDays : 1
+    const minuteSeverityFactor = hasNoIncidents ? 1 : Math.max(0, 1 - Math.min(averageLateMinutes, 60) / 60)
+    const disciplineScore = hasNoIncidents ? 100 : Math.round(Math.max(0, 100 * presenceRate * (((1 - lateRateWhenPresent) * 0.65) + (minuteSeverityFactor * 0.35))))
+    const availabilityScore = hasNoIncidents ? 100 : Math.round(Math.max(0, 100 * (1 - totalAbsenceDays / reportDays)))
 
     const evaluationAxes = [
       { subject: 'Ponctualite', score: punctualityScore, fullMark: 100 },
@@ -249,7 +300,7 @@ export function EmployeeDetailPage() {
       { subject: 'Disponibilite', score: availabilityScore, fullMark: 100 },
     ]
 
-    const overallScore = Math.round(evaluationAxes.reduce((sum, item) => sum + item.score, 0) / evaluationAxes.length)
+    const overallScore = hasNoIncidents ? 100 : Math.round(evaluationAxes.reduce((sum, item) => sum + item.score, 0) / evaluationAxes.length)
     const strongestAxis = evaluationAxes.reduce((best, item) => (item.score > best.score ? item : best), evaluationAxes[0])
     const weakestAxis = evaluationAxes.reduce((worst, item) => (item.score < worst.score ? item : worst), evaluationAxes[0])
 
@@ -260,7 +311,7 @@ export function EmployeeDetailPage() {
       daysFlagged: activeDays.length,
       dailyTrend,
       topReasons,
-      incidents,
+      incidents: coloredIncidents,
       evaluationAxes,
       overallScore,
       strongestAxis,
@@ -268,8 +319,9 @@ export function EmployeeDetailPage() {
       unjustifiedAbsenceDays,
       cleanDays,
       longestCleanStreak,
+      hasNoIncidents,
     }
-  }, [absenceReasons, allReports, employee, reasonColors, threshold])
+  }, [absenceReasons, allReports, employee, threshold])
 
   if (!employee || !reporting) {
     return (
@@ -484,9 +536,13 @@ export function EmployeeDetailPage() {
         </>
       ) : (
         <div className="card empty-state-card">
-          <ShieldAlert size={48} />
+          <UserCheck size={48} />
           <h2>Aucun incident</h2>
           <p>Aucun retard ni absence pour cet employe sur la periode selectionnee.</p>
+          <div className="employee-score-chip">
+            <span>Evaluation globale</span>
+            <strong>{reporting.overallScore}/100</strong>
+          </div>
         </div>
       )}
     </section>
